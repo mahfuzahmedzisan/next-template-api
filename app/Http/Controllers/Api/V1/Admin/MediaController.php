@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Enums\MediaKind;
 use App\Enums\VideoStatus;
 use App\Http\Controllers\Controller;
@@ -250,6 +252,8 @@ class MediaController extends Controller
 
         GenerateHlsJob::dispatch($mediaItem->id);
 
+        Audit::log(AuditEvent::MediaRetried, subject: $mediaItem);
+
         return $this->apiSuccess('Conversion started again.', [
             'media' => (new MediaResource($mediaItem))->resolve(),
         ]);
@@ -306,6 +310,10 @@ class MediaController extends Controller
         if (is_file($clean)) {
             @unlink($clean);
         }
+
+        Audit::log(AuditEvent::MediaThumbnailUpdated, subject: $mediaItem, properties: [
+            'file_name' => $filename,
+        ]);
 
         return $this->apiSuccess('Thumbnail saved.', [
             'media' => (new MediaResource($mediaItem->fresh() ?? $mediaItem))->resolve(),

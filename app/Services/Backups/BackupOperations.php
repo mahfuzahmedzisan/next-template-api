@@ -2,6 +2,10 @@
 
 namespace App\Services\Backups;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
+use App\Audit\RestorePreserver;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
@@ -15,6 +19,7 @@ class BackupOperations
     public function __construct(
         private readonly BackupManager $backups,
         private readonly BackupRunner $runner,
+        private readonly RestorePreserver $auditTrail,
     ) {}
 
     /**
@@ -44,17 +49,26 @@ class BackupOperations
 
             $this->runner->backup($filename);
 
-            if ($this->backups->find($filename) === null) {
-                throw new RuntimeException('The backup finished but no archive was written.');
-            }
+            $created = $this->backups->find($filename)
+                ?? throw new RuntimeException('The backup finished but no archive was written.');
 
             $this->backups->record(BackupManager::OPERATION_BACKUP, BackupManager::STATE_COMPLETED, [
                 'message' => 'Backup created.',
             ]);
 
+            Audit::log(AuditEvent::BackupCompleted, causer: $userId, properties: [
+                'kind' => $kind,
+                'size' => $this->backups->describe($created)['size'],
+            ], subjectLabel: $filename);
+
             return $filename;
         } catch (Throwable $exception) {
             $this->fail(BackupManager::OPERATION_BACKUP, $exception);
+
+            Audit::log(AuditEvent::BackupFailed, causer: $userId, properties: [
+                'kind' => $kind,
+                'reason' => mb_substr($exception->getMessage(), 0, 500),
+            ], subjectLabel: $filename);
 
             throw $exception;
         } finally {
@@ -75,6 +89,9 @@ class BackupOperations
             throw new RuntimeException('Another backup or restore is already running.');
         }
 
+        $snapshot = null;
+        $replayed = false;
+
         try {
             $backup = $this->backups->find($id)
                 ?? throw new RuntimeException('That backup no longer exists.');
@@ -93,8 +110,13 @@ class BackupOperations
                 'message' => 'Restoring the database.',
             ]);
 
+            $snapshot = $this->auditTrail->capture(Carbon::parse($this->backups->describe($backup)['created_at']));
+
             $this->runner->restore($backup->path());
             $this->runner->migrate();
+
+            $kept = $this->auditTrail->replay($snapshot);
+            $replayed = true;
 
             try {
                 $this->runner->reindexSearch();
@@ -106,12 +128,47 @@ class BackupOperations
             $this->backups->record(BackupManager::OPERATION_RESTORE, BackupManager::STATE_COMPLETED, [
                 'message' => 'Database restored.',
             ]);
+
+            Audit::log(AuditEvent::RestoreCompleted, causer: $userId, properties: [
+                'safety_backup' => $safety,
+                'audit_entries_kept' => $kept,
+            ], subjectLabel: $id);
         } catch (Throwable $exception) {
             $this->fail(BackupManager::OPERATION_RESTORE, $exception);
+
+            if (! $replayed) {
+                $this->replayAfterFailure($snapshot);
+            }
+
+            Audit::log(AuditEvent::RestoreFailed, causer: $userId, properties: [
+                'reason' => mb_substr($exception->getMessage(), 0, 500),
+            ], subjectLabel: $id);
 
             throw $exception;
         } finally {
             $lock->release();
+        }
+    }
+
+    /**
+     * A restore that fails part way may already have dropped the audit table.
+     * Putting the captured rows back is best effort; the snapshot stays on
+     * disk if even that fails.
+     */
+    private function replayAfterFailure(?string $snapshot): void
+    {
+        if ($snapshot === null) {
+            return;
+        }
+
+        try {
+            $this->runner->migrate();
+            $this->auditTrail->replay($snapshot);
+        } catch (Throwable $exception) {
+            Log::error('Could not put the audit log back after a failed restore.', [
+                'snapshot' => $snapshot,
+                'error' => $exception->getMessage(),
+            ]);
         }
     }
 

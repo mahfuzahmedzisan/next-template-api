@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
+use App\Models\User;
 use App\Services\DeviceSessions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\ResetsUserPasswords;
 
@@ -20,7 +24,15 @@ class PasswordResetController extends Controller
      */
     public function sendResetLink(ForgotPasswordRequest $request): JsonResponse
     {
-        Password::sendResetLink($request->only('email'));
+        $status = Password::sendResetLink($request->only('email'));
+        $email = Str::lower((string) $request->input('email'));
+
+        Audit::log(
+            AuditEvent::PasswordResetLinkRequested,
+            subject: User::query()->where('email', $email)->first(),
+            properties: ['email' => $email, 'status' => $status],
+            subjectLabel: $email,
+        );
 
         return $this->apiSuccess('If an account exists for that email, a password reset link has been sent.');
     }
@@ -31,7 +43,11 @@ class PasswordResetController extends Controller
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function ($user) use ($resetter, $request, $devices) {
                 $resetter->reset($user, $request->only('password', 'password_confirmation'));
-                $devices->revokeAll($user, DeviceSessions::REASON_PASSWORD_RESET);
+                $revoked = $devices->revokeAll($user, DeviceSessions::REASON_PASSWORD_RESET);
+
+                Audit::log(AuditEvent::PasswordReset, subject: $user, causer: $user, properties: [
+                    'signed_out_devices' => $revoked,
+                ]);
             },
         );
 

@@ -5,11 +5,11 @@ namespace App\Services;
 use App\Models\ApplicationSetting;
 use App\Support\MediaUrl;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 final class ApplicationSettings
@@ -73,9 +73,35 @@ final class ApplicationSettings
     public function adminPayload(): array
     {
         return [
-            'general' => $this->publicGeneral(),
+            'general' => [
+                ...$this->publicGeneral(),
+                'audit_retention_days' => $this->auditRetentionDays(),
+            ],
             'smtp' => $this->smtpPayload(),
         ];
+    }
+
+    /**
+     * Days an audit entry is kept, always inside the configured bounds so a
+     * bad stored value can neither wipe recent history nor keep it forever.
+     */
+    public function auditRetentionDays(): int
+    {
+        $min = (int) config('audit.retention.min_days', 30);
+        $max = (int) config('audit.retention.max_days', 730);
+        $default = (int) config('audit.retention.default_days', 180);
+
+        try {
+            $value = $this->get('general', 'audit_retention_days');
+        } catch (Throwable) {
+            return $default;
+        }
+
+        if (! is_numeric($value)) {
+            return $default;
+        }
+
+        return max($min, min($max, (int) $value));
     }
 
     /**

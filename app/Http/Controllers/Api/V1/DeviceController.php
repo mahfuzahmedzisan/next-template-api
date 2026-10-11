@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserDeviceResource;
 use App\Models\User;
@@ -76,6 +78,8 @@ class DeviceController extends Controller
 
         $devices->revoke($model, DeviceSessions::REASON_REVOKED);
 
+        Audit::log(AuditEvent::DeviceRevoked, subject: $user, causer: $user, properties: $this->deviceProperties($model));
+
         return $this->apiSuccess('Device signed out.');
     }
 
@@ -91,6 +95,8 @@ class DeviceController extends Controller
 
         $model->delete();
 
+        Audit::log(AuditEvent::DeviceForgotten, subject: $user, causer: $user, properties: $this->deviceProperties($model));
+
         return $this->apiSuccess('Removed from the history.');
     }
 
@@ -100,9 +106,29 @@ class DeviceController extends Controller
         $user = $request->user();
         $removed = $user->devices()->inactive()->delete();
 
+        if ($removed > 0) {
+            Audit::log(AuditEvent::DeviceHistoryCleared, subject: $user, causer: $user, properties: [
+                'removed' => $removed,
+            ]);
+        }
+
         return $this->apiSuccess('History cleared.', [
             'removed' => $removed,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function deviceProperties(UserDevice $device): array
+    {
+        return array_filter([
+            'device_id' => $device->getKey(),
+            'browser' => $device->browser,
+            'platform' => $device->platform,
+            'device_type' => $device->device_type,
+            'device_ip' => $device->ip_address,
+        ], fn ($value) => $value !== null);
     }
 
     private function currentTokenId(User $user): ?int

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BackupResource;
 use App\Jobs\CreateBackupJob;
@@ -49,6 +51,8 @@ class BackupController extends Controller
 
         CreateBackupJob::dispatch(BackupManager::KIND_MANUAL, $request->user()->id);
 
+        Audit::log(AuditEvent::BackupRequested, properties: ['kind' => BackupManager::KIND_MANUAL]);
+
         return $this->apiSuccess('Backup started.', $this->payload(), Response::HTTP_ACCEPTED);
     }
 
@@ -64,7 +68,14 @@ class BackupController extends Controller
             return ApiResponse::notFound('Backup not found.');
         }
 
+        $details = $this->backups->describe($model);
         $this->backups->delete($model);
+
+        Audit::log(AuditEvent::BackupDeleted, properties: [
+            'kind' => $details['kind'],
+            'size' => $details['size'],
+            'taken_at' => $details['created_at'],
+        ], subjectLabel: $backup);
 
         return $this->apiSuccess('Backup deleted.', $this->payload());
     }
@@ -96,6 +107,9 @@ class BackupController extends Controller
             'message' => 'Waiting for the backup worker.',
         ]);
 
+        // Written before the job runs, so the restore preserves this entry as well.
+        Audit::log(AuditEvent::RestoreRequested, subjectLabel: $backup);
+
         RestoreBackupJob::dispatch($backup, $request->user()->id);
 
         return $this->apiSuccess('Restore started.', $this->payload(), Response::HTTP_ACCEPTED);
@@ -118,6 +132,8 @@ class BackupController extends Controller
             'user_id' => $request->user()->id,
         ], self::DOWNLOAD_TOKEN_SECONDS);
 
+        Audit::log(AuditEvent::BackupDownloadRequested, subjectLabel: $backup);
+
         return $this->apiSuccess('Download ready.', [
             'token' => $token,
             'expires_at' => now()->addSeconds(self::DOWNLOAD_TOKEN_SECONDS)->toIso8601String(),
@@ -137,6 +153,10 @@ class BackupController extends Controller
         if ($model === null) {
             return ApiResponse::notFound('Backup not found.');
         }
+
+        Audit::log(AuditEvent::BackupDownloaded, properties: [
+            'size' => $this->backups->describe($model)['size'],
+        ], subjectLabel: basename($model->path()));
 
         return Storage::disk(BackupManager::DISK)->download($model->path(), basename($model->path()), [
             'Content-Type' => 'application/zip',

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserDevice;
+use App\Support\ClientContext;
 use App\Support\UserAgent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -29,12 +30,12 @@ class DeviceSessions
 
     public function record(User $user, PersonalAccessToken $token, Request $request, bool $remember): UserDevice
     {
-        $userAgent = $this->clientUserAgent($request);
+        $userAgent = ClientContext::userAgent($request);
 
         return UserDevice::query()->create([
             'user_id' => $user->id,
             'token_id' => $token->id,
-            'ip_address' => $this->clientIp($request),
+            'ip_address' => ClientContext::ip($request),
             'user_agent' => $userAgent,
             ...UserAgent::parse($userAgent),
             'remember' => $remember,
@@ -105,28 +106,6 @@ class DeviceSessions
 
             return $tokens->count();
         });
-    }
-
-    /**
-     * The BFF forwards the browser's IP and user agent. EnsureTrustedBff has
-     * already proven the request came from the BFF, so the headers are trusted.
-     */
-    private function clientIp(Request $request): ?string
-    {
-        $forwarded = trim((string) $request->header('X-Client-IP', ''));
-
-        if (filter_var($forwarded, FILTER_VALIDATE_IP) !== false) {
-            return $forwarded;
-        }
-
-        return $request->ip();
-    }
-
-    private function clientUserAgent(Request $request): ?string
-    {
-        $agent = trim((string) ($request->header('X-Client-User-Agent') ?: $request->userAgent()));
-
-        return $agent === '' ? null : mb_substr($agent, 0, 512);
     }
 
     private function latest(?Carbon $first, ?Carbon $second): ?Carbon

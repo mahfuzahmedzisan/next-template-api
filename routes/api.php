@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\ActivityController;
 use App\Http\Controllers\Api\V1\Admin\BackupController;
 use App\Http\Controllers\Api\V1\Admin\MediaController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BroadcastAuthController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
+use App\Http\Controllers\Api\V1\ProfileActivityController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RealtimeController;
 use App\Http\Controllers\Api\V1\TwoFactorAuthenticationController;
@@ -46,6 +48,8 @@ Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
     Route::delete('avatar', [ProfileController::class, 'destroyAvatar']);
     Route::delete('sessions', [ProfileController::class, 'destroyOtherSessions'])->middleware('throttle:6,1');
     Route::delete('/', [ProfileController::class, 'destroy']);
+
+    Route::get('activity', [ProfileActivityController::class, 'index']);
 
     Route::prefix('devices')->group(function (): void {
         Route::get('/', [DeviceController::class, 'index']);
@@ -96,6 +100,13 @@ Route::middleware(['auth:sanctum', 'role:admin', 'throttle:admin-users'])->group
     Route::put('admin/settings/smtp', [ApplicationSettingsController::class, 'updateSmtp']);
     Route::post('admin/settings/logo', [ApplicationSettingsController::class, 'uploadLogo']);
     Route::post('admin/settings/favicon', [ApplicationSettingsController::class, 'uploadFavicon']);
+
+    Route::prefix('admin/audit')->group(function (): void {
+        Route::get('/', [ActivityController::class, 'index']);
+        Route::get('overview', [ActivityController::class, 'overview']);
+        Route::get('export', [ActivityController::class, 'export'])->middleware('throttle:5,1');
+        Route::get('{activity}', [ActivityController::class, 'show'])->whereNumber('activity');
+    });
 
     Route::prefix('admin/backups')->group(function (): void {
         Route::get('/', [BackupController::class, 'index']);

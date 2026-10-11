@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Enums\MediaKind;
 use App\Enums\VideoStatus;
 use App\Jobs\GenerateHlsJob;
@@ -208,6 +210,12 @@ final class StoreFinishedUpload
             'error_message' => null,
         ])->save();
 
+        Audit::log(AuditEvent::MediaUploadCompleted, subject: $item, causer: $item->uploaded_by, properties: [
+            'file_name' => $storedName,
+            'mime' => $item->mime,
+            'size' => $item->size,
+        ]);
+
         if ($item->kind->streamsAsHls()) {
             GenerateHlsJob::dispatch($item->id);
         }
@@ -223,6 +231,11 @@ final class StoreFinishedUpload
             'status' => VideoStatus::Failed,
             'error_message' => $reason,
         ])->save();
+
+        Audit::log(AuditEvent::MediaProcessingFailed, subject: $item, causer: $item->uploaded_by, properties: [
+            'stage' => 'upload',
+            'reason' => $reason,
+        ]);
     }
 
     /**

@@ -38,6 +38,12 @@ Schedule::command('sanctum:prune-expired --hours=24')->daily();
 
 Schedule::command('model:prune', ['--model' => [UserDevice::class]])->daily();
 
+// Retention comes from Application settings > General (30 to 730 days).
+Schedule::command('app:audit-prune')
+    ->dailyAt((string) config('audit.prune.time'))
+    ->timezone((string) config('audit.prune.timezone'))
+    ->withoutOverlapping(60);
+
 // Database backups. Avoid 02:00-03:00 in zones with daylight saving time.
 $backupTimezone = (string) config('backup.schedule.timezone');
 

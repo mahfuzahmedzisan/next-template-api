@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CaptureAuditContext;
 use App\Http\Middleware\EnsureTrustedBff;
 use App\Http\Middleware\EnsureTusHook;
 use App\Http\Middleware\EnsureUserHasRole;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Every /api/v1 route. Not applied to /up (Coolify healthcheck).
         $middleware->appendToGroup('api', EnsureTrustedBff::class);
+        $middleware->appendToGroup('api', CaptureAuditContext::class);
 
         // This is an API-only application with no `login` route to redirect
         // guests to. Without this, Laravel's default Authenticate middleware

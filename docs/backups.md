@@ -31,9 +31,12 @@ Admin → Application → Database backup → Restore. It needs the account
 password and the word RESTORE. The job then:
 
 1. Writes a `pre-restore-<time>.zip` safety backup of the current database.
-2. Runs `backup:restore --reset`, which drops every table and imports the dump.
-3. Runs `migrate --force`, in case the dump predates newer migrations.
-4. Reimports search (`scout:import-all`). A failure here is only logged.
+2. Copies audit log entries newer than the backup to
+   `storage/app/private/audit-restore/` (see `docs/audit.md`).
+3. Runs `backup:restore --reset`, which drops every table and imports the dump.
+4. Runs `migrate --force`, in case the dump predates newer migrations, then
+   puts the copied audit entries back.
+5. Reimports search (`scout:import-all`). A failure here is only logged.
 
 Everything is replaced, including users and `personal_access_tokens`, so
 whoever started the restore is usually signed out. Sign in with the password

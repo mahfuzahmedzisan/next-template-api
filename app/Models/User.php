@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Audit\AuditCategory;
+use App\Audit\Concerns\Auditable;
 use App\Contracts\Scout\DefinesSearchIndex;
 use App\Enums\UserRole;
 use App\Models\Concerns\ConfiguresScoutSearch;
@@ -18,6 +20,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Activitylog\Models\Concerns\CausesActivity;
 
 /**
  * `role` is intentionally excluded from #[Fillable] - it must never be
@@ -30,7 +33,26 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable implements DefinesSearchIndex
 {
     /** @use HasFactory<UserFactory> */
-    use ConfiguresScoutSearch, HasApiTokens, HasFactory, Notifiable, TwoFactorAuthenticatable;
+    use Auditable, CausesActivity, ConfiguresScoutSearch, HasApiTokens, HasFactory, Notifiable, TwoFactorAuthenticatable;
+
+    protected AuditCategory $auditCategory = AuditCategory::Users;
+
+    /**
+     * Password and two-factor columns are covered by dedicated security events.
+     *
+     * @var list<string>
+     */
+    protected array $auditInclude = [
+        'name',
+        'email',
+        'role',
+        'avatar',
+        'timezone',
+        'theme',
+        'email_notifications',
+        'push_notifications',
+        'email_verified_at',
+    ];
 
     /**
      * Get the attributes that should be cast.

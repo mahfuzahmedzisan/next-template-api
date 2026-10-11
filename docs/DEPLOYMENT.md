@@ -119,3 +119,22 @@ and keeps 14 days. The archives sit on the same storage volume as the media
   for the dump, and `DROP`/`CREATE`/`INSERT`/`ALTER` for a restore.
 
 Restore, the safety backup and recovery steps are in `docs/backups.md`.
+
+## 7. Audit log
+
+spatie/laravel-activitylog writes every audited action to the `activity_log`
+table. Run `php artisan migrate --force` once after deploying this release.
+
+- Retention is set by an admin under Application settings > General
+  (30 to 730 days, 180 by default). `app:audit-prune` deletes older entries
+  every night at `AUDIT_PRUNE_TIME` (`02:00` Asia/Dhaka by default), so the
+  scheduler container must be running.
+- Live updates on the audit screen are a queued broadcast on the `default`
+  queue, which the main worker already consumes. Set `AUDIT_BROADCAST=false`
+  to turn them off. `ACTIVITYLOG_ENABLED=false` stops all audit writes.
+- A restore keeps audit entries written after the backup was taken. They are
+  parked in `storage/app/private/audit-restore/` during the restore and
+  removed once replayed.
+
+Details, the event catalogue and how to audit a new model are in
+`docs/audit.md`.

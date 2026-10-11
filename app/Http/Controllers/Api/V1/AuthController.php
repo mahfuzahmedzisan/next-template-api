@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
 use App\Http\Requests\Api\V1\Auth\TwoFactorChallengeRequest;
@@ -38,7 +40,13 @@ class AuthController extends Controller
             return $this->apiUnprocessable('Public registration is turned off.');
         }
 
-        $user = $creator->create($request->all());
+        // The "Account registered" entry below replaces the model's "created" entry.
+        $user = activity()->withoutLogging(fn () => $creator->create($request->all()));
+
+        Audit::log(AuditEvent::Registered, subject: $user, causer: $user, properties: [
+            'name' => $user->name,
+            'email' => $user->email,
+        ]);
 
         $token = $this->tokens->issue($user, $request);
 
@@ -56,6 +64,16 @@ class AuthController extends Controller
         $user = User::query()->where('email', $credentials['email'])->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            Audit::log(
+                AuditEvent::LoginFailed,
+                subject: $user,
+                properties: [
+                    'email' => $credentials['email'],
+                    'reason' => $user ? 'wrong_password' : 'unknown_email',
+                ],
+                subjectLabel: $user ? null : $credentials['email'],
+            );
+
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -72,6 +90,11 @@ class AuthController extends Controller
         }
 
         $token = $this->tokens->issue($user, $request, $request->boolean('remember'));
+
+        Audit::log(AuditEvent::LoginSucceeded, subject: $user, causer: $user, properties: [
+            'remember' => $request->boolean('remember'),
+            'two_factor' => false,
+        ]);
 
         return $this->apiSuccess(
             'Logged in successfully.',
@@ -110,9 +133,14 @@ class AuthController extends Controller
             ]);
         }
 
+        $usedRecoveryCode = filled($request->input('recovery_code'));
         $valid = $this->verifyCode($user, $provider, $request->input('code'), $request->input('recovery_code'));
 
         if (! $valid) {
+            Audit::log(AuditEvent::TwoFactorChallengeFailed, subject: $user, properties: [
+                'method' => $usedRecoveryCode ? 'recovery_code' : 'authenticator',
+            ]);
+
             throw ValidationException::withMessages([
                 'code' => ['The provided two factor authentication code was invalid.'],
             ]);
@@ -121,6 +149,12 @@ class AuthController extends Controller
         Cache::put($usedKey, true, now()->addMinutes(self::CHALLENGE_TTL_MINUTES + 1));
 
         $token = $this->tokens->issue($user, $request, $payload['remember']);
+
+        Audit::log(AuditEvent::LoginSucceeded, subject: $user, causer: $user, properties: [
+            'remember' => $payload['remember'],
+            'two_factor' => true,
+            'method' => $usedRecoveryCode ? 'recovery_code' : 'authenticator',
+        ]);
 
         return $this->apiSuccess(
             'Logged in successfully.',
@@ -137,7 +171,12 @@ class AuthController extends Controller
 
     public function logout(Request $request, DeviceSessions $devices): JsonResponse
     {
-        $token = $request->user()?->currentAccessToken();
+        $user = $request->user();
+        $token = $user?->currentAccessToken();
+
+        if ($user instanceof User) {
+            Audit::log(AuditEvent::Logout, subject: $user, causer: $user);
+        }
 
         if ($token instanceof PersonalAccessToken) {
             $devices->revokeToken($token, DeviceSessions::REASON_SIGNED_OUT);

@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Enums\VideoStatus;
 use App\Models\MediaItem;
 use App\Services\HlsTranscodeService;
@@ -50,6 +52,11 @@ class GenerateHlsJob implements ShouldQueue
             'status' => VideoStatus::Failed,
             'error_message' => $exception?->getMessage() ?: 'Transcode failed.',
         ])->save();
+
+        Audit::log(AuditEvent::MediaProcessingFailed, subject: $item, causer: $item->uploaded_by, properties: [
+            'stage' => 'transcode',
+            'reason' => mb_substr((string) $item->error_message, 0, 500),
+        ]);
 
         app(HlsTranscodeService::class)->broadcast($item);
     }

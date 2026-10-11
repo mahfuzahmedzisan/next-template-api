@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
@@ -36,7 +38,11 @@ class ProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
         $updater->update($user, $request->all());
-        $devices->revokeAll($user, DeviceSessions::REASON_PASSWORD_CHANGED, $this->currentToken($user));
+        $revoked = $devices->revokeAll($user, DeviceSessions::REASON_PASSWORD_CHANGED, $this->currentToken($user));
+
+        Audit::log(AuditEvent::PasswordChanged, subject: $user, causer: $user, properties: [
+            'signed_out_devices' => $revoked,
+        ]);
 
         return $this->apiSuccess('Password updated successfully.');
     }
@@ -60,9 +66,15 @@ class ProfileController extends Controller
             DeviceSessions::REASON_SIGNED_OUT_EVERYWHERE,
             $includeCurrent ? null : $this->currentToken($user),
         );
+        $others = $includeCurrent ? max(0, $revoked - 1) : $revoked;
+
+        Audit::log(AuditEvent::SignedOutEverywhere, subject: $user, causer: $user, properties: [
+            'signed_out_devices' => $others,
+            'included_current' => $includeCurrent,
+        ]);
 
         return $this->apiSuccess('Signed out of other devices.', [
-            'revoked' => $includeCurrent ? max(0, $revoked - 1) : $revoked,
+            'revoked' => $others,
             'signed_out_current' => $includeCurrent,
         ]);
     }
@@ -99,7 +111,8 @@ class ProfileController extends Controller
         $user = $request->user();
 
         try {
-            $user = $avatars->store($user, $request->file('avatar'));
+            $user = activity()->withoutLogging(fn () => $avatars->store($user, $request->file('avatar')));
+            Audit::log(AuditEvent::AvatarUpdated, subject: $user, causer: $user);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -119,7 +132,12 @@ class ProfileController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $user = $avatars->delete($user);
+        $hadAvatar = filled($user->avatar);
+        $user = activity()->withoutLogging(fn () => $avatars->delete($user));
+
+        if ($hadAvatar) {
+            Audit::log(AuditEvent::AvatarRemoved, subject: $user, causer: $user);
+        }
 
         return $this->apiSuccess('Avatar removed successfully.', [
             'user' => new UserResource($user),
@@ -139,10 +157,17 @@ class ProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        Audit::log(AuditEvent::AccountDeleted, subject: $user, causer: $user, properties: [
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role?->value,
+            'active_tokens' => $user->tokens()->count(),
+        ]);
+
         $avatars->purge($user);
 
         $user->tokens()->delete();
-        $user->delete();
+        $user->disableLogging()->delete();
 
         return $this->apiSuccess('Account deleted successfully.');
     }

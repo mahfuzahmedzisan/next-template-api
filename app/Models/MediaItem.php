@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Audit\AuditCategory;
+use App\Audit\Concerns\Auditable;
 use App\Contracts\Scout\DefinesSearchIndex;
 use App\Enums\MediaKind;
 use App\Enums\VideoStatus;
@@ -47,7 +49,17 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class MediaItem extends Model implements DefinesSearchIndex, HasMedia
 {
     /** @use HasFactory<MediaItemFactory> */
-    use ConfiguresScoutSearch, HasFactory, InteractsWithMedia;
+    use Auditable, ConfiguresScoutSearch, HasFactory, InteractsWithMedia;
+
+    protected AuditCategory $auditCategory = AuditCategory::Media;
+
+    /**
+     * Only what an admin edits. Upload and transcoding progress is audited
+     * through dedicated media events instead of every status save.
+     *
+     * @var list<string>
+     */
+    protected array $auditInclude = ['title', 'slug', 'kind', 'alt', 'keywords'];
 
     protected $attributes = [
         'status' => 'awaiting_upload',

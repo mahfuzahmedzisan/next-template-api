@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
+use App\Audit\Support\ChangeSet;
 use App\Http\Controllers\Controller;
 use App\Services\ApplicationSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
 class ApplicationSettingsController extends Controller
@@ -30,15 +34,26 @@ class ApplicationSettingsController extends Controller
             'name' => ['nullable', 'string', 'max:120'],
             'short_name' => ['nullable', 'string', 'max:40'],
             'registration_enabled' => ['required', 'boolean'],
+            'audit_retention_days' => [
+                'sometimes',
+                'integer',
+                'between:'.config('audit.retention.min_days').','.config('audit.retention.max_days'),
+            ],
             'remove_logo' => ['sometimes', 'boolean'],
             'remove_favicon' => ['sometimes', 'boolean'],
             'logo_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'favicon_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
         ]);
 
+        $before = $settings->adminPayload()['general'];
+
         $this->putOrForget($settings, 'general', 'name', $validated['name'] ?? null);
         $this->putOrForget($settings, 'general', 'short_name', $validated['short_name'] ?? null);
         $settings->put('general', 'registration_enabled', (bool) $validated['registration_enabled']);
+
+        if (array_key_exists('audit_retention_days', $validated)) {
+            $settings->put('general', 'audit_retention_days', (int) $validated['audit_retention_days']);
+        }
 
         if ($request->exists('logo_url')) {
             $settings->assignBrand('logo', $validated['logo_url'] ?? null);
@@ -52,8 +67,15 @@ class ApplicationSettingsController extends Controller
             $settings->assignBrand('favicon', null);
         }
 
+        $payload = $settings->adminPayload();
+        $changes = ChangeSet::between($before, $payload['general']);
+
+        if ($changes !== []) {
+            Audit::log(AuditEvent::GeneralSettingsUpdated, changes: $changes, subjectLabel: 'General settings');
+        }
+
         return $this->apiSuccess('General settings saved.', [
-            'settings' => $settings->adminPayload(),
+            'settings' => $payload,
         ]);
     }
 
@@ -78,6 +100,8 @@ class ApplicationSettingsController extends Controller
             ]);
         }
 
+        $before = $settings->adminPayload()['smtp'];
+
         $settings->put('smtp', 'enabled', (bool) $validated['enabled']);
         $this->putOrForget($settings, 'smtp', 'host', $validated['host'] ?? null);
         $settings->put('smtp', 'port', (int) ($validated['port'] ?? 587));
@@ -87,12 +111,28 @@ class ApplicationSettingsController extends Controller
         $this->putOrForget($settings, 'smtp', 'from_name', $validated['from_name'] ?? null);
 
         $password = $validated['password'] ?? null;
-        if (is_string($password) && $password !== '') {
+        $passwordChanged = is_string($password) && $password !== '';
+        if ($passwordChanged) {
             $settings->storeSmtpPassword($password);
         }
 
+        $payload = $settings->adminPayload();
+        $changes = ChangeSet::between(
+            Arr::except($before, 'password_set'),
+            Arr::except($payload['smtp'], 'password_set'),
+        );
+
+        if ($passwordChanged) {
+            $changes['old']['password'] = $before['password_set'] ? 'set' : null;
+            $changes['attributes']['password'] = 'updated';
+        }
+
+        if ($changes !== []) {
+            Audit::log(AuditEvent::SmtpSettingsUpdated, changes: $changes, subjectLabel: 'Mail settings');
+        }
+
         return $this->apiSuccess('Mail settings saved.', [
-            'settings' => $settings->adminPayload(),
+            'settings' => $payload,
         ]);
     }
 
@@ -113,6 +153,15 @@ class ApplicationSettingsController extends Controller
         ]);
 
         $settings->storeBrand($kind, $request->file('file'));
+
+        Audit::log(
+            $kind === 'logo' ? AuditEvent::LogoUpdated : AuditEvent::FaviconUpdated,
+            properties: [
+                'file_name' => $request->file('file')->getClientOriginalName(),
+                'size' => $request->file('file')->getSize(),
+            ],
+            subjectLabel: $kind === 'logo' ? 'Logo' : 'Favicon',
+        );
 
         return $this->apiSuccess('Brand file saved.', [
             'settings' => $settings->adminPayload(),

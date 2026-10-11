@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Audit\Support\AuditContext;
 use App\Services\Backups\BackupManager;
 use App\Services\Backups\BackupOperations;
 use Illuminate\Console\Attributes\Description;
@@ -21,6 +22,10 @@ class CreateBackupCommand extends Command
             $this->components->error('The kind must be scheduled or manual.');
 
             return self::INVALID;
+        }
+
+        if ($kind === BackupManager::KIND_SCHEDULED) {
+            AuditContext::markSystem();
         }
 
         try {

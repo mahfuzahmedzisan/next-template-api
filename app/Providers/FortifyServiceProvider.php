@@ -6,8 +6,12 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
+use App\Audit\Audit;
+use App\Audit\AuditEvent;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -49,7 +53,23 @@ class FortifyServiceProvider extends ServiceProvider
                 Str::lower((string) $request->input(Fortify::username())).'|'.$request->ip()
             );
 
-            return Limit::perMinute(5)->by($throttleKey);
+            return Limit::perMinute(5)
+                ->by($throttleKey)
+                ->response(function (Request $request, array $headers) use ($throttleKey) {
+                    // One entry per key per minute, however hard the endpoint is hammered.
+                    if (Cache::add('audit:login-throttled:'.sha1($throttleKey), true, 60)) {
+                        $email = Str::lower((string) $request->input(Fortify::username()));
+
+                        Audit::log(
+                            AuditEvent::LoginThrottled,
+                            subject: User::query()->where('email', $email)->first(),
+                            properties: ['email' => $email],
+                            subjectLabel: $email !== '' ? $email : null,
+                        );
+                    }
+
+                    return response()->json(['message' => 'Too Many Attempts.'], 429, $headers);
+                });
         });
 
         // Our two-factor challenge is stateless (no PHP session - see
