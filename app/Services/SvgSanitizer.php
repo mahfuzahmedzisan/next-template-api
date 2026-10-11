@@ -4,6 +4,8 @@ namespace App\Services;
 
 use DOMDocument;
 use DOMElement;
+use DOMNode;
+use DOMXPath;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
 
@@ -24,6 +26,16 @@ final class SvgSanitizer
         'handler',
         'set',
     ];
+
+    /** Animations that rewrite a link can turn a safe `<a>` into `javascript:`. */
+    private const ANIMATION_TAGS = [
+        'animate',
+        'animatemotion',
+        'animatetransform',
+    ];
+
+    /** Script schemes, CSS expressions, imports, external `url()`, and CSS escapes that can hide either. */
+    private const UNSAFE_CSS = '/javascript:|vbscript:|expression\s*\(|@import|behavior\s*:|-moz-binding|\\\\|url\s*\(\s*[\'"]?\s*(?!#)/i';
 
     public function isSvg(UploadedFile|string $source): bool
     {
@@ -53,6 +65,12 @@ final class SvgSanitizer
         }
 
         $xml = (string) preg_replace('/^\xEF\xBB\xBF/', '', $xml);
+
+        // DTDs carry entity expansion (billion laughs) and entity/markup collisions.
+        if (preg_match('/<!(DOCTYPE|ENTITY|ATTLIST|ELEMENT)/i', $xml) === 1) {
+            throw new RuntimeException('This image could not be sanitized.');
+        }
+
         $previous = libxml_use_internal_errors(true);
         $dom = new DOMDocument;
         $loaded = $dom->loadXML($xml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
@@ -61,7 +79,7 @@ final class SvgSanitizer
 
         $root = $dom->documentElement;
 
-        if (! $loaded || ! $root instanceof DOMElement || strtolower($root->localName) !== 'svg') {
+        if (! $loaded || $dom->doctype !== null || ! $root instanceof DOMElement || strtolower($root->localName) !== 'svg') {
             throw new RuntimeException('This image could not be sanitized.');
         }
 
@@ -93,14 +111,23 @@ final class SvgSanitizer
 
     private function strip(DOMDocument $dom): void
     {
+        /** @var list<DOMNode> $remove */
         $remove = [];
+
+        foreach ((new DOMXPath($dom))->query('//processing-instruction() | //comment()') ?: [] as $node) {
+            $remove[] = $node;
+        }
 
         foreach ($dom->getElementsByTagName('*') as $element) {
             if (! $element instanceof DOMElement) {
                 continue;
             }
 
-            if (in_array(strtolower($element->localName), self::REMOVED_TAGS, true)) {
+            $tag = strtolower($element->localName);
+
+            if (in_array($tag, self::REMOVED_TAGS, true)
+                || ($tag === 'style' && preg_match(self::UNSAFE_CSS, $element->textContent) === 1)
+                || (in_array($tag, self::ANIMATION_TAGS, true) && str_ends_with(strtolower($element->getAttribute('attributeName')), 'href'))) {
                 $remove[] = $element;
 
                 continue;
@@ -112,13 +139,10 @@ final class SvgSanitizer
                 $name = strtolower($attribute->nodeName);
                 $value = trim($attribute->nodeValue ?? '');
 
-                if (str_starts_with($name, 'on') || ($name === 'style' && preg_match('/javascript:|expression\s*\(/i', $value) === 1)) {
-                    $drop[] = $attribute->nodeName;
-
-                    continue;
-                }
-
-                if (str_ends_with($name, 'href') && $value !== '' && ! str_starts_with($value, '#')) {
+                if (str_starts_with($name, 'on')
+                    || $this->hasScriptScheme($value)
+                    || ($name === 'style' && preg_match(self::UNSAFE_CSS, $value) === 1)
+                    || (str_ends_with($name, 'href') && $value !== '' && ! str_starts_with($value, '#'))) {
                     $drop[] = $attribute->nodeName;
                 }
             }
@@ -128,8 +152,16 @@ final class SvgSanitizer
             }
         }
 
-        foreach ($remove as $element) {
-            $element->parentNode?->removeChild($element);
+        foreach ($remove as $node) {
+            $node->parentNode?->removeChild($node);
         }
+    }
+
+    /** Browsers ignore whitespace and control characters inside a scheme, e.g. `java\tscript:`. */
+    private function hasScriptScheme(string $value): bool
+    {
+        $compact = strtolower((string) preg_replace('/[\x00-\x20]+/', '', $value));
+
+        return str_contains($compact, 'javascript:') || str_contains($compact, 'vbscript:');
     }
 }

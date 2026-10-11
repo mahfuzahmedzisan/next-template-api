@@ -11,7 +11,6 @@
     "require": {
         "php": "^8.3",
         "algolia/algoliasearch-client-php": "^4.49",
-        "enshrined/svg-sanitize": "0.22.0",
         "laravel/fortify": "^1.40",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.3",

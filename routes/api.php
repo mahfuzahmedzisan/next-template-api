@@ -42,6 +42,7 @@ Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
     Route::put('preferences', [ProfileController::class, 'updatePreferences']);
     Route::post('avatar', [ProfileController::class, 'updateAvatar']);
     Route::delete('avatar', [ProfileController::class, 'destroyAvatar']);
+    Route::delete('sessions', [ProfileController::class, 'destroyOtherSessions'])->middleware('throttle:6,1');
     Route::delete('/', [ProfileController::class, 'destroy']);
 
     Route::prefix('two-factor-authentication')->group(function (): void {

@@ -42,7 +42,7 @@ Rebuild PHP GD with `libwebp-dev` when you want `imagewebp()` as well. `cwebp` a
 
 ## SVG
 
-SVG uploads are stored as `.svg` only after `enshrined/svg-sanitize` runs. Scripts, event handlers, and remote references are removed. If sanitization returns nothing, the upload is rejected. Spatie may still minify the cleaned file when `svgo` is on `PATH`. Raster conversion is not applied to SVG.
+SVG uploads are stored as `.svg` only after `App\Services\SvgSanitizer` runs. Files with a DOCTYPE or entity declarations are rejected. Scripts, event handlers, `javascript:` values, link-rewriting animations, unsafe CSS, and remote references are removed. If sanitization fails, the upload is rejected. Spatie may still minify the cleaned file when `svgo` is on `PATH`. Raster conversion is not applied to SVG.
 
 ## Config
 

@@ -35,13 +35,27 @@ class ProfileController extends Controller
         /** @var User $user */
         $user = $request->user();
         $updater->update($user, $request->all());
-
-        $current = $user->currentAccessToken();
-        $user->tokens()
-            ->when($current instanceof PersonalAccessToken, fn ($query) => $query->whereKeyNot($current->getKey()))
-            ->delete();
+        $this->deleteOtherTokens($user);
 
         return $this->apiSuccess('Password updated successfully.');
+    }
+
+    /**
+     * Signs out every other device after the password is confirmed.
+     */
+    public function destroyOtherSessions(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => ['required', 'string', 'current_password:sanctum'],
+        ]);
+
+        /** @var User $user */
+        $user = $request->user();
+        $revoked = $this->deleteOtherTokens($user);
+
+        return $this->apiSuccess('Signed out of other devices.', [
+            'revoked' => $revoked,
+        ]);
     }
 
     public function updatePreferences(Request $request): JsonResponse
@@ -122,5 +136,14 @@ class ProfileController extends Controller
         $user->delete();
 
         return $this->apiSuccess('Account deleted successfully.');
+    }
+
+    private function deleteOtherTokens(User $user): int
+    {
+        $current = $user->currentAccessToken();
+
+        return $user->tokens()
+            ->when($current instanceof PersonalAccessToken, fn ($query) => $query->whereKeyNot($current->getKey()))
+            ->delete();
     }
 }

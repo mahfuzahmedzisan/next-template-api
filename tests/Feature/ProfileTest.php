@@ -101,6 +101,35 @@ it('signs out other sessions when the password changes', function (): void {
     $this->withToken($current['access_token'])->getJson('/api/v1/auth/me')->assertOk();
 });
 
+it('signs out other devices after confirming the password', function (): void {
+    User::factory()->create([
+        'email' => 'devices@example.com',
+        'password' => 'Password1!',
+    ]);
+
+    $current = loginAs('devices@example.com');
+    $other = loginAs('devices@example.com');
+
+    $this->withToken($current['access_token'])
+        ->deleteJson('/api/v1/profile/sessions', ['current_password' => 'wrong'])
+        ->assertUnprocessable();
+
+    $this->assertDatabaseCount('personal_access_tokens', 2);
+
+    $this->withToken($current['access_token'])
+        ->deleteJson('/api/v1/profile/sessions', ['current_password' => 'Password1!'])
+        ->assertOk()
+        ->assertJsonPath('data.revoked', 1);
+
+    $this->assertDatabaseCount('personal_access_tokens', 1);
+
+    auth()->forgetGuards();
+    $this->withToken($other['access_token'])->getJson('/api/v1/auth/me')->assertUnauthorized();
+
+    auth()->forgetGuards();
+    $this->withToken($current['access_token'])->getJson('/api/v1/auth/me')->assertOk();
+});
+
 it('rejects a password update when the current password is wrong', function (): void {
     User::factory()->create([
         'email' => 'password-wrong@example.com',
