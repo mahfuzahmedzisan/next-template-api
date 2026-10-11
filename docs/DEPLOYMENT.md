@@ -18,6 +18,12 @@ rebuild without any signing keys or OAuth clients.
   them.
 - `sanctum:prune-expired --hours=24` runs daily from the scheduler to clear
   expired rows.
+- Every token has a row in `user_devices` (browser, platform, IP, sign-in
+  time). The BFF forwards the browser IP and user agent as `X-Client-IP` and
+  `X-Client-User-Agent`; they are only read after `EnsureTrustedBff` passes.
+  Revoking a device deletes its token but keeps the row as history.
+  `model:prune` runs daily and deletes rows revoked or expired more than 30
+  days ago, so the scheduler must be running.
 - Optional: set `SANCTUM_TOKEN_PREFIX` (for example `mak_`) so leaked tokens
   are recognisable by secret scanners. Changing it only affects new tokens.
 

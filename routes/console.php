@@ -2,6 +2,7 @@
 
 use App\Enums\VideoStatus;
 use App\Models\MediaItem;
+use App\Models\UserDevice;
 use App\Services\StoreFinishedUpload;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -34,3 +35,5 @@ Schedule::call(function (): void {
 })->hourly()->name('prune-abandoned-media-uploads')->withoutOverlapping();
 
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
+
+Schedule::command('model:prune', ['--model' => [UserDevice::class]])->daily();

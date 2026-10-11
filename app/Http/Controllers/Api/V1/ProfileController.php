@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\AvatarStorageService;
+use App\Services\DeviceSessions;
 use App\Support\AllowedAvatar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,31 +31,39 @@ class ProfileController extends Controller
     /**
      * Signs out every other session; the one that changed the password stays.
      */
-    public function updatePassword(Request $request, UpdatesUserPasswords $updater): JsonResponse
+    public function updatePassword(Request $request, UpdatesUserPasswords $updater, DeviceSessions $devices): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
         $updater->update($user, $request->all());
-        $this->deleteOtherTokens($user);
+        $devices->revokeAll($user, DeviceSessions::REASON_PASSWORD_CHANGED, $this->currentToken($user));
 
         return $this->apiSuccess('Password updated successfully.');
     }
 
     /**
-     * Signs out every other device after the password is confirmed.
+     * Signs out every other device after the password is confirmed, and
+     * this one too when `include_current` is set.
      */
-    public function destroyOtherSessions(Request $request): JsonResponse
+    public function destroyOtherSessions(Request $request, DeviceSessions $devices): JsonResponse
     {
         $request->validate([
             'current_password' => ['required', 'string', 'current_password:sanctum'],
+            'include_current' => ['sometimes', 'boolean'],
         ]);
 
         /** @var User $user */
         $user = $request->user();
-        $revoked = $this->deleteOtherTokens($user);
+        $includeCurrent = $request->boolean('include_current');
+        $revoked = $devices->revokeAll(
+            $user,
+            DeviceSessions::REASON_SIGNED_OUT_EVERYWHERE,
+            $includeCurrent ? null : $this->currentToken($user),
+        );
 
         return $this->apiSuccess('Signed out of other devices.', [
-            'revoked' => $revoked,
+            'revoked' => $includeCurrent ? max(0, $revoked - 1) : $revoked,
+            'signed_out_current' => $includeCurrent,
         ]);
     }
 
@@ -138,12 +147,10 @@ class ProfileController extends Controller
         return $this->apiSuccess('Account deleted successfully.');
     }
 
-    private function deleteOtherTokens(User $user): int
+    private function currentToken(User $user): ?PersonalAccessToken
     {
         $current = $user->currentAccessToken();
 
-        return $user->tokens()
-            ->when($current instanceof PersonalAccessToken, fn ($query) => $query->whereKeyNot($current->getKey()))
-            ->delete();
+        return $current instanceof PersonalAccessToken ? $current : null;
     }
 }

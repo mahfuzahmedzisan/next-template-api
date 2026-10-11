@@ -9,6 +9,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\ApplicationSettings;
 use App\Services\AuthTokenService;
+use App\Services\DeviceSessions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -19,6 +20,7 @@ use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 use Laravel\Fortify\Contracts\TwoFactorAuthenticationProvider;
 use Laravel\Fortify\Fortify;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
 class AuthController extends Controller
@@ -38,7 +40,7 @@ class AuthController extends Controller
 
         $user = $creator->create($request->all());
 
-        $token = $this->tokens->issue($user);
+        $token = $this->tokens->issue($user, $request);
 
         return $this->apiCreated(
             'Registered successfully.',
@@ -69,7 +71,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $this->tokens->issue($user, $request->boolean('remember'));
+        $token = $this->tokens->issue($user, $request, $request->boolean('remember'));
 
         return $this->apiSuccess(
             'Logged in successfully.',
@@ -118,7 +120,7 @@ class AuthController extends Controller
 
         Cache::put($usedKey, true, now()->addMinutes(self::CHALLENGE_TTL_MINUTES + 1));
 
-        $token = $this->tokens->issue($user, $payload['remember']);
+        $token = $this->tokens->issue($user, $request, $payload['remember']);
 
         return $this->apiSuccess(
             'Logged in successfully.',
@@ -133,9 +135,13 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(Request $request): JsonResponse
+    public function logout(Request $request, DeviceSessions $devices): JsonResponse
     {
-        $request->user()?->currentAccessToken()?->delete();
+        $token = $request->user()?->currentAccessToken();
+
+        if ($token instanceof PersonalAccessToken) {
+            $devices->revokeToken($token, DeviceSessions::REASON_SIGNED_OUT);
+        }
 
         return $this->apiSuccess('Logged out successfully.');
     }

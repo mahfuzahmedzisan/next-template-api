@@ -5,7 +5,6 @@ use App\Services\ImageConversionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use RuntimeException;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 uses(RefreshDatabase::class);
@@ -119,7 +118,8 @@ it('signs out other devices after confirming the password', function (): void {
     $this->withToken($current['access_token'])
         ->deleteJson('/api/v1/profile/sessions', ['current_password' => 'Password1!'])
         ->assertOk()
-        ->assertJsonPath('data.revoked', 1);
+        ->assertJsonPath('data.revoked', 1)
+        ->assertJsonPath('data.signed_out_current', false);
 
     $this->assertDatabaseCount('personal_access_tokens', 1);
 

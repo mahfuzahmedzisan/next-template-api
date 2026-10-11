@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\ApplicationSettingsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BroadcastAuthController;
+use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RealtimeController;
@@ -44,6 +45,17 @@ Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
     Route::delete('avatar', [ProfileController::class, 'destroyAvatar']);
     Route::delete('sessions', [ProfileController::class, 'destroyOtherSessions'])->middleware('throttle:6,1');
     Route::delete('/', [ProfileController::class, 'destroy']);
+
+    Route::prefix('devices')->group(function (): void {
+        Route::get('/', [DeviceController::class, 'index']);
+        Route::get('history', [DeviceController::class, 'history']);
+
+        Route::middleware('throttle:30,1')->group(function (): void {
+            Route::delete('history', [DeviceController::class, 'clearHistory']);
+            Route::delete('{device}', [DeviceController::class, 'revoke'])->whereNumber('device');
+            Route::delete('{device}/history', [DeviceController::class, 'forget'])->whereNumber('device');
+        });
+    });
 
     Route::prefix('two-factor-authentication')->group(function (): void {
         Route::get('/', [TwoFactorAuthenticationController::class, 'show']);
