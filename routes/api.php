@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\BackupController;
 use App\Http\Controllers\Api\V1\Admin\MediaController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\ApplicationSettingsController;
@@ -95,4 +96,16 @@ Route::middleware(['auth:sanctum', 'role:admin', 'throttle:admin-users'])->group
     Route::put('admin/settings/smtp', [ApplicationSettingsController::class, 'updateSmtp']);
     Route::post('admin/settings/logo', [ApplicationSettingsController::class, 'uploadLogo']);
     Route::post('admin/settings/favicon', [ApplicationSettingsController::class, 'uploadFavicon']);
+
+    Route::prefix('admin/backups')->group(function (): void {
+        Route::get('/', [BackupController::class, 'index']);
+        Route::get('download/{token}', [BackupController::class, 'download'])->where('token', '[A-Za-z0-9]{64}');
+
+        Route::middleware('throttle:10,1')->group(function (): void {
+            Route::post('/', [BackupController::class, 'store']);
+            Route::delete('{backup}', [BackupController::class, 'destroy'])->where('backup', '[A-Za-z0-9._-]+\.zip');
+            Route::post('{backup}/restore', [BackupController::class, 'restore'])->where('backup', '[A-Za-z0-9._-]+\.zip');
+            Route::post('{backup}/download-token', [BackupController::class, 'downloadToken'])->where('backup', '[A-Za-z0-9._-]+\.zip');
+        });
+    });
 });

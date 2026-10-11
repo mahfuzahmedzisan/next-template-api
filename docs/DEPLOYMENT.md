@@ -102,3 +102,20 @@ php artisan scout:import-all --fresh
 
 Use `--queue` when Redis workers are up and the catalog is large. Switching
 engines is the same command against the new driver. See `docs/scout.md`.
+
+## 6. Database backups
+
+spatie/laravel-backup writes a gzipped dump, zipped, to
+`storage/app/private/backups/<BACKUP_NAME>/` every night at 00:00 Asia/Dhaka
+and keeps 14 days. The archives sit on the same storage volume as the media
+(section 2), so that volume is required for backups too.
+
+- The image installs the official MySQL 8.4 client (`mysqldump`, `mysql`).
+  The `laravel-backup-worker` Supervisor program consumes the `backups`
+  queue, one job at a time.
+- Set `BACKUP_NAME` once and leave it. Optional: `BACKUP_ARCHIVE_PASSWORD`
+  (AES-256 archives) and `BACKUP_NOTIFICATION_EMAIL` (failure mail).
+- The database user needs `SELECT`, `SHOW VIEW`, `TRIGGER` and `LOCK TABLES`
+  for the dump, and `DROP`/`CREATE`/`INSERT`/`ALTER` for a restore.
+
+Restore, the safety backup and recovery steps are in `docs/backups.md`.

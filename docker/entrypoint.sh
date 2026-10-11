@@ -12,6 +12,8 @@ fi
 # so the skeleton has to be recreated on every boot rather than only at build time.
 mkdir -p \
     bootstrap/cache \
+    storage/app/backup-temp \
+    storage/app/private/backups \
     storage/app/public \
     storage/app/tus \
     storage/framework/cache/data \

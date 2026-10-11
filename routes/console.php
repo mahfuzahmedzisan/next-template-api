@@ -37,3 +37,20 @@ Schedule::call(function (): void {
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
 
 Schedule::command('model:prune', ['--model' => [UserDevice::class]])->daily();
+
+// Database backups. Avoid 02:00-03:00 in zones with daylight saving time.
+$backupTimezone = (string) config('backup.schedule.timezone');
+
+Schedule::command('app:backup --kind=scheduled')
+    ->dailyAt((string) config('backup.schedule.time'))
+    ->timezone($backupTimezone)
+    ->withoutOverlapping(120);
+
+Schedule::command('backup:clean')
+    ->dailyAt('00:30')
+    ->timezone($backupTimezone)
+    ->withoutOverlapping(60);
+
+Schedule::command('backup:monitor')
+    ->dailyAt('01:00')
+    ->timezone($backupTimezone);

@@ -1,0 +1,43 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Services\Backups\BackupManager;
+use App\Services\Backups\BackupOperations;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\Attributes\FailOnTimeout;
+use Illuminate\Queue\InteractsWithQueue;
+use Throwable;
+
+#[FailOnTimeout]
+class CreateBackupJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable;
+
+    public int $timeout = 3600;
+
+    public int $tries = 1;
+
+    public function __construct(public string $kind, public ?int $userId = null)
+    {
+        $this->onQueue('backups');
+    }
+
+    public function handle(BackupOperations $operations): void
+    {
+        $operations->backup($this->kind, $this->userId);
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $backups = app(BackupManager::class);
+
+        if ($backups->isBusy()) {
+            $backups->record(BackupManager::OPERATION_BACKUP, BackupManager::STATE_FAILED, [
+                'message' => $exception?->getMessage() ?: 'The backup job failed.',
+            ]);
+        }
+    }
+}

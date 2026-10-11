@@ -62,6 +62,13 @@ return [
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
+            // spatie/laravel-backup: --no-tablespaces lets a non-root user dump on MySQL 8.
+            'dump' => [
+                'useSingleTransaction' => true,
+                'mysql_gtid_purged' => 'OFF',
+                'add_extra_option' => '--no-tablespaces',
+                'timeout' => 1800,
+            ],
         ],
 
         'mariadb' => [

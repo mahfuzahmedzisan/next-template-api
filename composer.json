@@ -20,10 +20,12 @@
         "pbmedia/laravel-ffmpeg": "^8.9",
         "pusher/pusher-php-server": "^7.3",
         "spatie/image": "^3.9",
+        "spatie/laravel-backup": "^10.0",
         "spatie/laravel-image-optimizer": "^1.8",
         "spatie/laravel-medialibrary": "^11.23",
         "spatie/laravel-query-builder": "^7.3",
         "typesense/typesense-php": "^6.0",
+        "wnx/laravel-backup-restore": "^1.9",
         "xenolope/quahog": "3.0"
     },
     "require-dev": {
