@@ -343,11 +343,25 @@ it('returns the latest completed audit, its history and page details', function 
         ->assertOk()
         ->assertJsonPath('data.completed.id', $audit->id)
         ->assertJsonPath('data.completed.pages.0.url', 'http://localhost:3000/about')
-        ->assertJsonPath('data.completed.summary.types.0.type', 'static');
+        ->assertJsonPath('data.completed.summary.types.0.type', 'static')
+        ->assertJsonPath('data.limits', ['ttfb_ms' => 800, 'max_html_kb' => 512]);
 
     actingAsSanctum($admin)->getJson('/api/v1/admin/seo/audits')
         ->assertOk()
-        ->assertJsonCount(1, 'data.audits');
+        ->assertJsonCount(1, 'data.audits')
+        ->assertJsonPath('data.audits.0.sections', [
+            ['key' => 'pages', 'score' => 100],
+            ['key' => 'site', 'score' => 100],
+            ['key' => 'sitemap', 'score' => 100],
+            ['key' => 'robots', 'score' => 100],
+        ]);
+
+    $robots = runAudit(scope: 'robots');
+
+    actingAsSanctum($admin)->getJson('/api/v1/admin/seo/audits')
+        ->assertJsonPath('data.audits.0.id', $robots->id)
+        ->assertJsonPath('data.audits.0.sections.0', ['key' => 'pages', 'score' => null])
+        ->assertJsonPath('data.audits.0.sections.3', ['key' => 'robots', 'score' => $robots->robots_report['score']]);
 
     actingAsSanctum($admin)->getJson("/api/v1/admin/seo/audits/{$audit->id}/pages/{$page->id}")
         ->assertOk()

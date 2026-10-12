@@ -105,6 +105,10 @@ class SeoAuditController extends Controller
             ] : null,
             'sections' => $sections,
             'categories' => SeoCheckCatalog::CATEGORIES,
+            'limits' => [
+                'ttfb_ms' => (int) config('seo.audit.ttfb_ms'),
+                'max_html_kb' => (int) config('seo.audit.max_html_kb'),
+            ],
         ];
     }
 
@@ -128,10 +132,30 @@ class SeoAuditController extends Controller
             'checks_passed' => $audit->checks_passed,
             'checks_failed' => $audit->checks_failed,
             'error' => $audit->error,
+            'sections' => $this->sectionScores($audit),
             'created_at' => $audit->created_at?->toIso8601String(),
             'started_at' => $audit->started_at?->toIso8601String(),
             'finished_at' => $audit->finished_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Section scores for the history trend. A sitemap- or robots-only run
+     * scores just its own sections; the others stay null.
+     *
+     * @return list<array{key: string, score: int|null}>
+     */
+    private function sectionScores(SeoAudit $audit): array
+    {
+        $stored = collect($audit->summary['sections'] ?? [])->pluck('score', 'key');
+        $reports = ['site' => $audit->site_checks, 'sitemap' => $audit->sitemap_report, 'robots' => $audit->robots_report];
+
+        return collect(['pages', 'site', 'sitemap', 'robots'])
+            ->map(fn (string $key): array => [
+                'key' => $key,
+                'score' => isset($stored[$key]) ? (int) $stored[$key] : (isset($reports[$key]['score']) ? (int) $reports[$key]['score'] : null),
+            ])
+            ->all();
     }
 
     /**
