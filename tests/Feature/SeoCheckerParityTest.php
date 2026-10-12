@@ -52,7 +52,7 @@ function checkerIssues(): array
             '<a href="/privacy-policy">Privacy</a>' => '',
         ]], '2 internal links'],
         'no external links' => ['external_links', fn () => ['html' => ['<a href="https://github.com/northwind">GitHub</a>' => '']], 'none'],
-        'text-to-HTML ratio around 1%' => ['text_ratio', fn () => ['html' => ['</head>' => '<script>'.str_repeat('self.__next_f.push([1,"chunk"]);', 12000).'</script></head>']], '%'],
+        'text-to-HTML ratio around 1%' => ['text_ratio', fn () => ['html' => ['</head>' => '<script>'.str_repeat('window.__data.push([1,"chunk"]);', 12000).'</script></head>']], '%'],
         'metadata streamed into <body> for browsers' => ['head_metadata', fn () => ['overrides' => ['/about' => fn (Request $request) => Http::response(
             str_contains($request->header('User-Agent')[0] ?? '', 'Chrome')
                 ? strtr(healthyHtml($o, '/about', [$title => '']), ['<body>' => '<body><title>About</title>'])
@@ -85,3 +85,11 @@ it('catches the checker issue', function (string $issue): void {
     expect($failed)->not->toBeNull()
         ->and($failed['actual'])->toContain($actual);
 })->with(fn () => array_keys(checkerIssues()));
+
+it('leaves the Next.js RSC payload out of the text-to-code ratio but reports the raw figure', function (): void {
+    $flight = '<script>self.__next_f.push([1,"'.str_repeat('chunk', 12000).'"])</script>';
+    $row = checkResults(goldenAudit(['html' => ['</body>' => $flight.'</body>']]), 'text_ratio')->first();
+
+    expect($row['passed'])->toBeTrue()
+        ->and($row['actual'])->toMatch('/^[\d.]+% \([\d.]+% with Next\.js data\)$/');
+});

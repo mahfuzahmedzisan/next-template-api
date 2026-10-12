@@ -259,13 +259,26 @@ final class ScannedPage
     }
 
     /**
-     * Visible text bytes as a share of the HTML bytes, in percent.
+     * Visible text bytes as a share of the HTML bytes, in percent. Inline
+     * framework data (the Next.js RSC payload) is left out unless asked for:
+     * it repeats the rendered page for hydration and the author cannot trim it.
      */
-    public function textRatio(): float
+    public function textRatio(bool $withFrameworkData = false): float
     {
-        $html = strlen($this->html);
+        $html = strlen($this->html) - ($withFrameworkData ? 0 : $this->frameworkDataBytes());
 
-        return $html === 0 ? 0.0 : round(strlen($this->visibleText()) / $html * 100, 1);
+        return $html <= 0 ? 0.0 : round(strlen($this->visibleText()) / $html * 100, 1);
+    }
+
+    /**
+     * Bytes of inline Next.js data scripts: the App Router flight chunks and
+     * the Pages Router __NEXT_DATA__ blob.
+     */
+    public function frameworkDataBytes(): int
+    {
+        preg_match_all('#<script\b(?:[^>]*\bid="__NEXT_DATA__"[^>]*>|[^>]*>\s*self\.__next_f\.push\().*?</script>#is', $this->html, $matches);
+
+        return array_sum(array_map('strlen', $matches[0]));
     }
 
     /**
