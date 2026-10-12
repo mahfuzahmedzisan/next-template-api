@@ -344,7 +344,16 @@ it('returns the latest completed audit, its history and page details', function 
         ->assertJsonPath('data.completed.id', $audit->id)
         ->assertJsonPath('data.completed.pages.0.url', 'http://localhost:3000/about')
         ->assertJsonPath('data.completed.summary.types.0.type', 'static')
+        ->assertJsonPath('data.completed.pages.0.failed_checks', collect($page->checks)->where('passed', false)->pluck('key')->values()->all())
         ->assertJsonPath('data.limits', ['ttfb_ms' => 800, 'max_html_kb' => 512]);
+
+    $page->update(['checks' => [
+        ['key' => 'title_present', 'passed' => true],
+        ['key' => 'ttfb', 'passed' => false],
+    ]]);
+
+    actingAsSanctum($admin)->getJson('/api/v1/admin/seo/audits/latest')
+        ->assertJsonPath('data.completed.pages.0.failed_checks', ['ttfb']);
 
     actingAsSanctum($admin)->getJson('/api/v1/admin/seo/audits')
         ->assertOk()

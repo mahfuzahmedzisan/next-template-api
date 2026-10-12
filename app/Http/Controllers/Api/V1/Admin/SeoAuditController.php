@@ -180,6 +180,7 @@ class SeoAuditController extends Controller
             'failed' => $page->failed,
             'ttfb_ms' => $page->ttfb_ms,
             'html_bytes' => $page->html_bytes,
+            'failed_checks' => collect($page->checks ?? [])->where('passed', false)->pluck('key')->values()->all(),
             'error' => $page->error,
         ];
     }
