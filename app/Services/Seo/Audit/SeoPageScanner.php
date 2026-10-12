@@ -109,7 +109,12 @@ final class SeoPageScanner
         return Http::timeout($timeout)
             ->connectTimeout(min($timeout, 10))
             ->withUserAgent((string) config('seo.audit.user_agent'))
-            ->withHeaders(['Accept' => 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8'])
+            // Guzzle sends no Accept-Encoding unless asked, so servers would answer uncompressed.
+            // Brotli is left out: curl builds without it could not decode the body.
+            ->withHeaders([
+                'Accept' => 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+                'Accept-Encoding' => 'gzip, deflate',
+            ])
             ->withOptions(['allow_redirects' => false]);
     }
 

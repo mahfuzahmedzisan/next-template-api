@@ -122,6 +122,9 @@ it('scores a healthy production page at 100 and ranks real issues', function ():
         ->and($issues['description_present']['pages'])->toBe(1)
         ->and($audit->summary['issues'][0]['priority'])->toBe('high')
         ->and(collect($audit->summary['categories'])->pluck('key')->all())->toContain('meta', 'content', 'configuration', 'performance');
+
+    Http::assertSent(fn (Request $request) => $request->url() === 'https://northwind.example/about'
+        && str_contains($request->header('Accept-Encoding')[0] ?? '', 'gzip'));
 });
 
 it('flags a development scan and leaves performance and environment checks out of the score', function (): void {
