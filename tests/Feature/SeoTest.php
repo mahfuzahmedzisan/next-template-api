@@ -288,6 +288,31 @@ it('seeds built-in pages without overwriting admin edits', function (): void {
         ->and(SeoPage::query()->where('path', '/login')->value('robots_index'))->toBeFalse();
 });
 
+it('fills empty starter copy on existing pages and keeps edited fields', function (): void {
+    seoPage(['path' => '/', 'label' => 'Home', 'page_type' => 'home']);
+    seoPage(['path' => '/login', 'label' => 'Sign in', 'page_type' => 'auth', 'meta_title' => 'Log in', 'robots_index' => false]);
+    Event::fake([SeoInvalidated::class]);
+
+    $this->seed(SeoPageSeeder::class);
+
+    $resolver = app(SeoResolver::class);
+    $home = $resolver->forPath('/');
+    $login = $resolver->forPath('/login');
+
+    expect($home['title'])->toBe('Northwind — Private workspace and portfolio')
+        ->and(mb_strlen($home['description']))->toBeGreaterThanOrEqual(70)->toBeLessThanOrEqual(160)
+        ->and($home['keywords'])->toContain('portfolio')
+        ->and($login['title'])->toBe('Log in - Northwind')
+        ->and($login['description'])->toContain('Sign in to your Northwind workspace')
+        ->and($resolver->forPath('/register')['title'])->toBe('Create your account - Northwind');
+
+    Event::assertDispatchedTimes(SeoInvalidated::class, 1);
+
+    $this->seed(SeoPageSeeder::class);
+
+    Event::assertDispatchedTimes(SeoInvalidated::class, 1);
+});
+
 it('keeps built-in pages from being removed or moved', function (): void {
     $this->seed(SeoPageSeeder::class);
     $admin = User::factory()->admin()->create();
