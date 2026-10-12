@@ -1,8 +1,11 @@
 <?php
 
 use App\Enums\VideoStatus;
+use App\Jobs\Seo\ProbeSeoPath;
+use App\Jobs\Seo\RegenerateSeoFiles;
 use App\Models\MediaItem;
 use App\Models\UserDevice;
+use App\Services\Seo\Audit\SeoAuditRunner;
 use App\Services\StoreFinishedUpload;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -60,3 +63,19 @@ Schedule::command('backup:clean')
 Schedule::command('backup:monitor')
     ->dailyAt('01:00')
     ->timezone($backupTimezone);
+
+// SEO: re-check every registered path, then rebuild the files from the result.
+Schedule::call(fn () => ProbeSeoPath::dispatchForAll())
+    ->dailyAt('03:30')
+    ->name('seo-probe-paths')
+    ->withoutOverlapping(30);
+
+Schedule::job(new RegenerateSeoFiles)
+    ->dailyAt('04:00')
+    ->name('seo-regenerate-files');
+
+// Weekly SEO health scan; the runner keeps only the latest audits.
+Schedule::call(fn () => app(SeoAuditRunner::class)->start(null, trigger: 'schedule'))
+    ->weeklyOn(1, '04:30')
+    ->name('seo-audit-weekly')
+    ->withoutOverlapping(30);

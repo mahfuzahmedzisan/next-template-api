@@ -47,6 +47,13 @@ return [
         ))),
 
         'bff_secret' => env('BFF_SECRET'),
+
+        /*
+         * Next.js route that drops its cached SEO data when Laravel changes it
+         * outside a Next request (jobs, commands). Leave empty until deployed.
+         * Example: https://example.com/api/internal/revalidate
+         */
+        'revalidate_url' => env('FRONTEND_REVALIDATE_URL'),
     ],
 
 ];

@@ -9,6 +9,7 @@ use App\Services\FfmpegHlsEncoder;
 use App\Support\FrontendOrigins;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -34,6 +35,20 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureRateLimiting();
         $this->configurePasswordResetUrl();
+        $this->configureSeoMorphMap();
+    }
+
+    /**
+     * Short, rename-proof aliases for seo_meta.seoable_type. Not enforced:
+     * activity log, Sanctum and media rows keep their full class names.
+     */
+    private function configureSeoMorphMap(): void
+    {
+        $seoables = array_filter((array) config('seo.seoables', []), 'is_string');
+
+        if ($seoables !== []) {
+            Relation::morphMap($seoables);
+        }
     }
 
     /**

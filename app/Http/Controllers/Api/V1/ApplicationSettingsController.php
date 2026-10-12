@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Audit\Audit;
 use App\Audit\AuditEvent;
 use App\Audit\Support\ChangeSet;
+use App\Events\SeoInvalidated;
 use App\Http\Controllers\Controller;
 use App\Services\ApplicationSettings;
 use Illuminate\Http\JsonResponse;
@@ -72,6 +73,7 @@ class ApplicationSettingsController extends Controller
 
         if ($changes !== []) {
             Audit::log(AuditEvent::GeneralSettingsUpdated, changes: $changes, subjectLabel: 'General settings');
+            SeoInvalidated::dispatch();
         }
 
         return $this->apiSuccess('General settings saved.', [
@@ -162,6 +164,8 @@ class ApplicationSettingsController extends Controller
             ],
             subjectLabel: $kind === 'logo' ? 'Logo' : 'Favicon',
         );
+
+        SeoInvalidated::dispatch();
 
         return $this->apiSuccess('Brand file saved.', [
             'settings' => $settings->adminPayload(),

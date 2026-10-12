@@ -9,7 +9,7 @@
     ],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
+        "php": "^8.4",
         "algolia/algoliasearch-client-php": "^4.49",
         "laravel/fortify": "^1.40",
         "laravel/framework": "^13.8",
@@ -25,6 +25,9 @@
         "spatie/laravel-image-optimizer": "^1.8",
         "spatie/laravel-medialibrary": "^11.23",
         "spatie/laravel-query-builder": "^7.3",
+        "spatie/laravel-sitemap": "^8.2",
+        "symfony/css-selector": "^8.1",
+        "symfony/dom-crawler": "^8.1",
         "typesense/typesense-php": "^6.0",
         "wnx/laravel-backup-restore": "^1.9",
         "xenolope/quahog": "3.0"
@@ -63,7 +66,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan queue:listen redis-seo --queue=seo --tries=1 --timeout=900\" \"npm run dev\" --names='server,queue,seo,vite'"
         ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",

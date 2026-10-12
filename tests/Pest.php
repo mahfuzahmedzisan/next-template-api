@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Fortify;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -24,6 +25,9 @@ pest()->extend(TestCase::class)
             'X-BFF-Secret' => (string) config('services.frontend.bff_secret'),
             'X-Frontend-Origin' => 'http://localhost:3000',
         ]);
+
+        // Settings saves rebuild sitemap/robots/llms; keep them off the real disk.
+        Storage::fake((string) config('seo.files_disk'));
     })
     ->in('Feature');
 

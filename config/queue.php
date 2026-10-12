@@ -73,6 +73,16 @@ return [
             'after_commit' => false,
         ],
 
+        // SEO audits run up to 15 minutes, so retry_after must stay above that.
+        'redis-seo' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => env('SEO_QUEUE', 'seo'),
+            'retry_after' => (int) env('SEO_QUEUE_RETRY_AFTER', 960),
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
         'deferred' => [
             'driver' => 'deferred',
         ],

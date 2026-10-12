@@ -35,6 +35,8 @@
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="SCOUT_DRIVER" value="collection"/>
         <env name="SCOUT_QUEUE" value="false"/>
+        <env name="SEO_QUEUE_CONNECTION" value="sync"/>
+        <env name="FRONTEND_REVALIDATE_URL" value=""/>
         <env name="BFF_SECRET" value="test-bff-secret"/>
         <env name="FRONTEND_URLS" value="http://localhost:3000"/>
         <env name="TUS_HOOK_SECRET" value="test-tus-secret"/>

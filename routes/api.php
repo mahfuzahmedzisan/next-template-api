@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\Admin\ActivityController;
 use App\Http\Controllers\Api\V1\Admin\BackupController;
 use App\Http\Controllers\Api\V1\Admin\MediaController;
+use App\Http\Controllers\Api\V1\Admin\SeoAuditController;
+use App\Http\Controllers\Api\V1\Admin\SeoController as AdminSeoController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\ApplicationSettingsController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -12,12 +14,17 @@ use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\ProfileActivityController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RealtimeController;
+use App\Http\Controllers\Api\V1\SeoController;
 use App\Http\Controllers\Api\V1\TwoFactorAuthenticationController;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('settings/public', [ApplicationSettingsController::class, 'publicShow']);
+
+Route::get('seo/page', [SeoController::class, 'page']);
+Route::get('seo/{file}', [SeoController::class, 'file'])
+    ->where('file', 'sitemap\.xml|robots\.txt|llms\.txt|sitemaps/sitemap-\d+\.xml');
 
 Route::prefix('auth')->group(function (): void {
     Route::post('register', [AuthController::class, 'register'])->middleware('throttle:register');
@@ -100,6 +107,26 @@ Route::middleware(['auth:sanctum', 'role:admin', 'throttle:admin-users'])->group
     Route::put('admin/settings/smtp', [ApplicationSettingsController::class, 'updateSmtp']);
     Route::post('admin/settings/logo', [ApplicationSettingsController::class, 'uploadLogo']);
     Route::post('admin/settings/favicon', [ApplicationSettingsController::class, 'uploadFavicon']);
+
+    Route::prefix('admin/seo')->group(function (): void {
+        Route::get('/', [AdminSeoController::class, 'index']);
+        Route::put('settings', [AdminSeoController::class, 'updateSettings']);
+        Route::post('pages', [AdminSeoController::class, 'storePage']);
+        Route::put('pages/{seoPage}', [AdminSeoController::class, 'updatePage'])->whereNumber('seoPage');
+        Route::delete('pages/{seoPage}', [AdminSeoController::class, 'destroyPage'])->whereNumber('seoPage');
+        Route::put('types/{type}', [AdminSeoController::class, 'updateType'])->where('type', '[a-z0-9_]+');
+        Route::get('files/{file}/download', [AdminSeoController::class, 'download'])->where('file', 'sitemap|robots|llms');
+
+        Route::get('audits', [SeoAuditController::class, 'index']);
+        Route::get('audits/latest', [SeoAuditController::class, 'latest']);
+        Route::get('audits/{audit}/pages/{page}', [SeoAuditController::class, 'page'])->whereNumber(['audit', 'page']);
+
+        Route::middleware('throttle:20,1')->group(function (): void {
+            Route::post('pages/{seoPage}/probe', [AdminSeoController::class, 'probePage'])->whereNumber('seoPage');
+            Route::post('files/{file}/regenerate', [AdminSeoController::class, 'regenerate'])->where('file', 'sitemap|robots|llms|all');
+            Route::post('audits', [SeoAuditController::class, 'store']);
+        });
+    });
 
     Route::prefix('admin/audit')->group(function (): void {
         Route::get('/', [ActivityController::class, 'index']);

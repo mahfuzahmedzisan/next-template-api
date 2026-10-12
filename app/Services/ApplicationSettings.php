@@ -43,6 +43,15 @@ final class ApplicationSettings
         unset($this->cache[$group]);
     }
 
+    /**
+     * Drops the in-memory copy. Long-running queue workers share this
+     * singleton across jobs, so jobs call this before reading settings.
+     */
+    public function flush(): void
+    {
+        $this->cache = [];
+    }
+
     public function registrationEnabled(): bool
     {
         $value = $this->get('general', 'registration_enabled');

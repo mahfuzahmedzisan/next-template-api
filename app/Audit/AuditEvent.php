@@ -41,6 +41,10 @@ enum AuditEvent: string
     case SmtpSettingsUpdated = 'settings.smtp_updated';
     case LogoUpdated = 'settings.logo_updated';
     case FaviconUpdated = 'settings.favicon_updated';
+    case SeoSettingsUpdated = 'seo.settings_updated';
+    case SeoTypeDefaultsUpdated = 'seo.type_defaults_updated';
+    case SeoFilesRegenerated = 'seo.files_regenerated';
+    case SeoAuditRequested = 'seo.audit_requested';
 
     case BackupRequested = 'backup.requested';
     case BackupCompleted = 'backup.completed';
@@ -90,7 +94,11 @@ enum AuditEvent: string
             self::GeneralSettingsUpdated,
             self::SmtpSettingsUpdated,
             self::LogoUpdated,
-            self::FaviconUpdated => AuditCategory::Settings,
+            self::FaviconUpdated,
+            self::SeoSettingsUpdated,
+            self::SeoTypeDefaultsUpdated,
+            self::SeoFilesRegenerated,
+            self::SeoAuditRequested => AuditCategory::Settings,
 
             self::BackupRequested,
             self::BackupCompleted,
@@ -134,6 +142,7 @@ enum AuditEvent: string
             self::DeviceRevoked,
             self::GeneralSettingsUpdated,
             self::SmtpSettingsUpdated,
+            self::SeoSettingsUpdated,
             self::BackupDownloadRequested,
             self::AuditExported => AuditSeverity::Notice,
 
@@ -173,6 +182,10 @@ enum AuditEvent: string
             self::SmtpSettingsUpdated => 'Mail settings updated',
             self::LogoUpdated => 'Logo updated',
             self::FaviconUpdated => 'Favicon updated',
+            self::SeoSettingsUpdated => 'SEO settings updated',
+            self::SeoTypeDefaultsUpdated => 'SEO content-type defaults updated',
+            self::SeoFilesRegenerated => 'SEO files regenerated',
+            self::SeoAuditRequested => 'SEO audit started',
             self::BackupRequested => 'Backup requested',
             self::BackupCompleted => 'Backup completed',
             self::BackupFailed => 'Backup failed',
