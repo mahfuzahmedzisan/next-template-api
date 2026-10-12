@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\Post;
+use App\Models\Project;
+
 return [
 
     /*
@@ -17,11 +20,14 @@ return [
      * morph alias stored in seo_meta.seoable_type. Example:
      *   'blog' => App\Models\Blog::class,
      */
-    'seoables' => [],
+    'seoables' => [
+        'project' => Project::class,
+        'post' => Post::class,
+    ],
 
     'page_types' => ['home', 'about', 'listing', 'contact', 'landing', 'legal', 'auth', 'other'],
 
-    'schema_types' => ['WebPage', 'AboutPage', 'CollectionPage', 'ContactPage', 'Article', 'Product'],
+    'schema_types' => ['WebPage', 'AboutPage', 'CollectionPage', 'ContactPage', 'Article', 'CreativeWork', 'Product'],
 
     /*
      * Generated sitemap.xml, robots.txt and llms.txt live under "seo/" here.
@@ -53,6 +59,9 @@ return [
          * htmlLimitedBots list; the frontend adds this token to that list.
          */
         'user_agent' => env('SEO_SCANNER_USER_AGENT', 'Mozilla/5.0 (compatible; MahfuzSeoScanner/1.0)'),
+        // Each page is fetched a second time as a regular browser: crawlers outside the
+        // htmlLimitedBots list get the same HTML, so metadata must be in <head> for it too.
+        'browser_user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
         'timeout' => (int) env('SEO_AUDIT_REQUEST_TIMEOUT', 15),
         'warmup_timeout' => 60,
         'job_timeout' => 900,
@@ -67,15 +76,70 @@ return [
         'keep' => 20,
         'ttfb_ms' => 800,
         'max_html_kb' => 512,
-        'detail_min_words' => 300,
 
         /*
-         * Checks that only make sense on detail pages (an article or a product),
-         * and checks skipped for a given static page type.
+         * The strict profile: the strictest rule the common third-party checkers
+         * (Semrush, Backlinko, Seobility, SEOptimer, Sitechecker, Rank Math) apply.
+         * The admin SEO tab reads the title and description ranges from here.
          */
-        'detail_only' => ['content_length'],
+        'thresholds' => [
+            'title' => [50, 60],
+            'description' => [140, 160],
+            // Minimum words of visible text, by static page type or model alias.
+            'min_words' => [
+                'home' => 800,
+                'about' => 600,
+                'landing' => 600,
+                'post' => 600,
+                'legal' => 500,
+                'project' => 400,
+                'listing' => 300,
+                'contact' => 300,
+                'default' => 300,
+            ],
+            'text_ratio' => 10,
+            'min_h2' => 2,
+            'min_h3' => 1,
+            'min_internal_links' => 5,
+            'og_image' => [
+                'min_width' => 1200,
+                'min_height' => 628,
+                // 1.91:1. The tolerance is tight on purpose: 1200x630 (1.905) is flagged by checkers.
+                'ratio' => 1.91,
+                'ratio_tolerance' => 0.005,
+                'max_bytes' => 5 * 1024 * 1024,
+            ],
+        ],
+
+        'site' => [
+            'favicon_sizes' => [16, 32, 48],
+            'apple_touch_size' => 180,
+            'manifest_icon_sizes' => [192, 512],
+            // Each must answer a permanent redirect (301 or 308) to the home page.
+            'index_paths' => ['/index.html', '/index.php', '/home'],
+        ],
+
+        'robots' => [
+            'max_kb' => 500,
+            // Crawlers must reach these to render pages (Next.js assets, images, the OG card).
+            'asset_paths' => ['/_next/static/chunks/main.js', '/_next/static/css/app.css', '/_next/image', '/og', '/api/storage/seo/image.jpg', '/favicon.ico'],
+            'agents' => ['*', 'googlebot', 'bingbot'],
+        ],
+
+        'sitemap' => [
+            // URLs fetched per audit to confirm they answer 200 and are indexable.
+            'url_limit' => 200,
+            'max_files' => 50,
+            'max_bytes' => 50 * 1024 * 1024,
+            'max_urls' => 50000,
+            'max_images' => 20,
+        ],
+
+        /*
+         * Checks skipped for a given static page type.
+         */
         'skip' => [
-            'auth' => ['h2_present', 'internal_links', 'og_image', 'structured_data'],
+            'auth' => ['headings', 'internal_links', 'external_links', 'og_image', 'og_image_meta', 'structured_data', 'breadcrumbs', 'content_length', 'text_ratio'],
         ],
     ],
 ];

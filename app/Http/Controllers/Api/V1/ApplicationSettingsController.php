@@ -18,7 +18,10 @@ class ApplicationSettingsController extends Controller
     public function publicShow(ApplicationSettings $settings): JsonResponse
     {
         return $this->apiSuccess('Application settings.', [
-            'settings' => $settings->publicGeneral(),
+            'settings' => [
+                ...$settings->publicGeneral(),
+                'favicon_set' => $settings->faviconSetUrls(),
+            ],
         ]);
     }
 

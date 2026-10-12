@@ -36,6 +36,7 @@ final class SeoResolver
     public function __construct(
         private readonly SeoSettings $settings,
         private readonly SeoCache $cache,
+        private readonly SocialImage $socialImage,
     ) {}
 
     /**
@@ -174,10 +175,9 @@ final class SeoResolver
         $robotsIndex = (bool) ($fields['robots_index'] ?? true);
         $robotsFollow = (bool) ($fields['robots_follow'] ?? true);
 
-        $image = SeoUrl::image($siteUrl, $fields['og_image'] ?? null)
-            ?? SeoUrl::image($siteUrl, $defaults['image'] ?? null)
-            ?? SeoUrl::image($siteUrl, $settings['default_og_image'])
-            ?? SeoUrl::join($siteUrl, '/og');
+        $ogImage = $this->shareImage($siteUrl, [$fields['og_image'] ?? null, $defaults['image'] ?? null, $settings['default_og_image']]);
+        $image = $ogImage['url'];
+        $twitterImage = $this->shareImage($siteUrl, [$fields['twitter_image'] ?? null], $ogImage)['url'];
 
         $ogTitle = $this->first($fields['og_title'] ?? null, $title);
         $ogDescription = $this->first($fields['og_description'] ?? null, $description);
@@ -218,6 +218,9 @@ final class SeoResolver
                 'title' => $ogTitle,
                 'description' => $ogDescription,
                 'image' => $image,
+                'image_width' => $ogImage['width'],
+                'image_height' => $ogImage['height'],
+                'image_type' => $ogImage['type'],
                 'image_alt' => $this->first($fields['og_image_alt'] ?? null, $rawTitle),
                 'type' => $ogType,
                 'locale' => $this->first($fields['og_locale'] ?? null, $settings['og_locale']),
@@ -228,7 +231,7 @@ final class SeoResolver
                 'card' => $this->first($fields['twitter_card'] ?? null, 'summary_large_image'),
                 'title' => $this->first($fields['twitter_title'] ?? null, $ogTitle),
                 'description' => $this->first($fields['twitter_description'] ?? null, $ogDescription),
-                'image' => SeoUrl::image($siteUrl, $fields['twitter_image'] ?? null) ?? $image,
+                'image' => $twitterImage,
                 'site' => $this->handle($settings['twitter_site']),
                 'creator' => $this->handle($settings['twitter_creator']),
             ],
@@ -245,6 +248,46 @@ final class SeoResolver
                 'lastmod' => $context['kind'] === 'model' ? $this->iso($context['lastmod'] ?? null) : null,
             ],
             'identity' => $identity,
+        ];
+    }
+
+    /**
+     * First usable share image: its 1200x628 variant when GD can build one,
+     * otherwise the original URL. SVGs are skipped because no share card
+     * renders them. Falls back to $fallback, then the generated /og card.
+     *
+     * @param  list<mixed>  $candidates
+     * @param  array{url: string, width: ?int, height: ?int, type: ?string}|null  $fallback
+     * @return array{url: string, width: ?int, height: ?int, type: ?string}
+     */
+    private function shareImage(string $siteUrl, array $candidates, ?array $fallback = null): array
+    {
+        foreach ($candidates as $candidate) {
+            $stored = $this->first($candidate);
+
+            if ($stored === null || SocialImage::isSvgPath($stored) || SeoUrl::image($siteUrl, $stored) === null) {
+                continue;
+            }
+
+            $variant = $this->socialImage->variant($stored);
+
+            if ($variant !== null) {
+                return [
+                    'url' => (string) SeoUrl::image($siteUrl, $variant['path']),
+                    'width' => $variant['width'],
+                    'height' => $variant['height'],
+                    'type' => $variant['type'],
+                ];
+            }
+
+            return ['url' => (string) SeoUrl::image($siteUrl, $stored), 'width' => null, 'height' => null, 'type' => null];
+        }
+
+        return $fallback ?? [
+            'url' => SeoUrl::join($siteUrl, '/og'),
+            'width' => SocialImage::WIDTH,
+            'height' => SocialImage::HEIGHT,
+            'type' => 'image/png',
         ];
     }
 
@@ -307,6 +350,21 @@ final class SeoResolver
                     'name' => $identity['name'],
                     'logo' => $identity['logo_url'] ? ['@type' => 'ImageObject', 'url' => $identity['logo_url']] : null,
                 ]),
+            ], static fn ($value) => $value !== null);
+        }
+
+        if ($type === 'CreativeWork') {
+            return array_filter([
+                '@context' => 'https://schema.org',
+                '@type' => 'CreativeWork',
+                'name' => $name,
+                'description' => $description,
+                'image' => [$image],
+                'url' => $url,
+                'dateCreated' => $published,
+                'dateModified' => $modified ?? $published,
+                'creator' => $author !== null ? ['@type' => 'Person', 'name' => $author] : null,
+                'isPartOf' => $website,
             ], static fn ($value) => $value !== null);
         }
 

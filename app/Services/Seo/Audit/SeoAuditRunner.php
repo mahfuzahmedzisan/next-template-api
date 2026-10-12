@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Seo\SeoResolver;
 use App\Services\Seo\SeoSettings;
 use App\Support\Seo\SeoUrl;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -26,14 +27,17 @@ final class SeoAuditRunner
         private readonly SeoSettings $settings,
         private readonly SeoResolver $resolver,
         private readonly SeoPageScanner $scanner,
+        private readonly SiteScanner $site,
+        private readonly RobotsTxtScanner $robotsScanner,
+        private readonly SitemapScanner $sitemap,
     ) {}
 
     /**
      * Queues a new audit, or returns null while another one is in progress.
      */
-    public function start(?User $user, bool $includeNoindex = false, string $trigger = 'manual'): ?SeoAudit
+    public function start(?User $user, bool $includeNoindex = false, string $trigger = 'manual', string $scope = 'full'): ?SeoAudit
     {
-        return DB::transaction(function () use ($user, $includeNoindex, $trigger): ?SeoAudit {
+        return DB::transaction(function () use ($user, $includeNoindex, $trigger, $scope): ?SeoAudit {
             if (SeoAudit::query()->inProgress()->lockForUpdate()->exists()) {
                 return null;
             }
@@ -41,6 +45,7 @@ final class SeoAuditRunner
             $audit = SeoAudit::query()->create([
                 'status' => SeoAudit::QUEUED,
                 'trigger' => $trigger,
+                'scope' => in_array($scope, SeoAudit::SCOPES, true) ? $scope : 'full',
                 'triggered_by' => $user?->id,
                 'include_noindex' => $includeNoindex,
             ]);
@@ -159,6 +164,36 @@ final class SeoAuditRunner
     }
 
     /**
+     * Runs the robots.txt scan, then (by scope) the sitemap and site scans,
+     * and stores their reports. Returns the robots rules for the page scan.
+     *
+     * @param  list<array<string, mixed>>  $targets
+     */
+    public function scanSections(SeoAudit $audit, array $targets): RobotsRules
+    {
+        $siteUrl = (string) $audit->site_url;
+        $development = $audit->environment === 'development';
+        $indexable = array_values(array_filter($targets, static fn (array $target) => $target['indexable']));
+        $paths = array_map(static fn (array $target) => (string) (parse_url($target['url'], PHP_URL_PATH) ?: '/'), $indexable);
+
+        $robots = $this->robotsScanner->scan($siteUrl, $paths, $development);
+        $reports = ['robots_report' => $robots['report']];
+
+        if (in_array($audit->scope, ['full', 'sitemap'], true)) {
+            $reports['sitemap_report'] = $this->sitemap->scan($siteUrl, $robots['rules']->sitemaps(), array_column($indexable, 'url'), $robots['rules'], $development);
+        }
+
+        if ($audit->scope === 'full') {
+            $sample = collect($paths)->first(static fn (string $path) => $path !== '/');
+            $reports['site_checks'] = $this->site->scan($siteUrl, $sample, $development);
+        }
+
+        $audit->forceFill($reports)->save();
+
+        return $robots['rules'];
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $targets
      */
     public function scanTargets(SeoAudit $audit, array $targets, RobotsRules $robots): void
@@ -188,11 +223,13 @@ final class SeoAuditRunner
     }
 
     /**
-     * Site, category and per-type scores plus the top issues, from the stored pages.
+     * Section, category and per-type scores plus the top issues, from the
+     * stored pages and the site, robots.txt and sitemap reports.
      */
     public function finalize(SeoAudit $audit): void
     {
         $pages = $audit->pages()->get();
+        $this->applyUniqueness($pages);
         $scored = $pages->filter(fn (SeoAuditPage $page) => $page->indexable && $page->error === null && $page->score !== null);
 
         $categories = [];
@@ -202,47 +239,63 @@ final class SeoAuditRunner
         $passedChecks = 0;
         $failedChecks = 0;
 
+        $collect = function (array $check, string $section) use (&$categories, &$issues, &$environment, &$informational): void {
+            if (! $check['counted']) {
+                $bucket = $check['category'] === 'performance' ? 'performance' : 'environment';
+                $environment[$check['key']] ??= ['key' => $check['key'], 'label' => $check['label'], 'category' => $bucket, 'passed' => 0, 'failed' => 0];
+                $environment[$check['key']][$check['passed'] ? 'passed' : 'failed']++;
+
+                return;
+            }
+
+            if ($section === 'pages') {
+                $categories[$check['category']] ??= ['total' => 0, 'passed' => 0];
+                $categories[$check['category']]['total'] += (int) $check['weight'];
+                $categories[$check['category']]['passed'] += $check['passed'] ? (int) $check['weight'] : 0;
+            }
+
+            if ($check['informational']) {
+                $informational[$check['key']] ??= ['key' => $check['key'], 'label' => $check['label'], 'passed' => 0, 'failed' => 0];
+                $informational[$check['key']][$check['passed'] ? 'passed' : 'failed']++;
+
+                return;
+            }
+
+            if (! $check['passed']) {
+                $issues[$check['key']] ??= [
+                    'key' => $check['key'],
+                    'label' => $check['label'],
+                    'category' => $check['category'],
+                    'section' => $section,
+                    'priority' => $check['priority'],
+                    'weight' => (int) $check['weight'],
+                    'fix_minutes' => (int) $check['fix_minutes'],
+                    'message' => $check['message'],
+                    'pages' => 0,
+                ];
+
+                if ($section === 'pages') {
+                    $issues[$check['key']]['pages']++;
+                }
+            }
+        };
+
         foreach ($pages as $page) {
             foreach ((array) $page->checks as $check) {
                 $check['passed'] ? $passedChecks++ : $failedChecks++;
 
-                if (! $page->indexable) {
-                    continue;
+                if ($page->indexable) {
+                    $collect($check, 'pages');
                 }
+            }
+        }
 
-                if (! $check['counted']) {
-                    $bucket = $check['category'] === 'performance' ? 'performance' : 'environment';
-                    $environment[$check['key']] ??= ['key' => $check['key'], 'label' => $check['label'], 'category' => $bucket, 'passed' => 0, 'failed' => 0];
-                    $environment[$check['key']][$check['passed'] ? 'passed' : 'failed']++;
+        $reports = ['site' => $audit->site_checks, 'sitemap' => $audit->sitemap_report, 'robots' => $audit->robots_report];
 
-                    continue;
-                }
-
-                $category = $check['category'];
-                $categories[$category] ??= ['total' => 0, 'passed' => 0];
-                $categories[$category]['total'] += (int) $check['weight'];
-                $categories[$category]['passed'] += $check['passed'] ? (int) $check['weight'] : 0;
-
-                if ($check['informational']) {
-                    $informational[$check['key']] ??= ['key' => $check['key'], 'label' => $check['label'], 'passed' => 0, 'failed' => 0];
-                    $informational[$check['key']][$check['passed'] ? 'passed' : 'failed']++;
-
-                    continue;
-                }
-
-                if (! $check['passed']) {
-                    $issues[$check['key']] ??= [
-                        'key' => $check['key'],
-                        'label' => $check['label'],
-                        'category' => $category,
-                        'priority' => $check['priority'],
-                        'weight' => (int) $check['weight'],
-                        'fix_minutes' => (int) $check['fix_minutes'],
-                        'message' => $check['message'],
-                        'pages' => 0,
-                    ];
-                    $issues[$check['key']]['pages']++;
-                }
+        foreach ($reports as $section => $report) {
+            foreach ((array) ($report['checks'] ?? []) as $check) {
+                $check['passed'] ? $passedChecks++ : $failedChecks++;
+                $collect($check, $section);
             }
         }
 
@@ -273,13 +326,35 @@ final class SeoAuditRunner
             }
         }
 
+        $sectionScores = [
+            'pages' => $scored->isEmpty() ? null : (int) round($scored->avg('score')),
+            'site' => $reports['site']['score'] ?? null,
+            'sitemap' => $reports['sitemap']['score'] ?? null,
+            'robots' => $reports['robots']['score'] ?? null,
+        ];
+        $sections = [];
+        $weighted = 0;
+        $weights = 0;
+
+        foreach (SeoCheckCatalog::SECTIONS as $key => $label) {
+            $score = $sectionScores[$key];
+            $weight = SeoCheckCatalog::SECTION_WEIGHTS[$key];
+            $sections[] = ['key' => $key, 'label' => $label, 'score' => $score, 'weight' => $weight];
+
+            if ($score !== null) {
+                $weighted += $score * $weight;
+                $weights += $weight;
+            }
+        }
+
         $audit->forceFill([
             'status' => SeoAudit::COMPLETED,
-            'score' => $scored->isEmpty() ? null : (int) round($scored->avg('score')),
+            'score' => $weights === 0 ? null : (int) round($weighted / $weights),
             'pages_failed' => $pages->whereNotNull('error')->count(),
             'checks_passed' => $passedChecks,
             'checks_failed' => $failedChecks,
             'summary' => [
+                'sections' => $sections,
                 'categories' => $categoryScores,
                 'types' => $types,
                 'issues' => array_slice($issues, 0, 20),
@@ -290,6 +365,62 @@ final class SeoAuditRunner
         ])->save();
 
         $this->prune();
+    }
+
+    /**
+     * Adds title_unique and description_unique to every indexable page that has
+     * a title or description, comparing across the whole audit, then rescores.
+     *
+     * @param  Collection<int, SeoAuditPage>  $pages
+     */
+    private function applyUniqueness(Collection $pages): void
+    {
+        $candidates = $pages->filter(fn (SeoAuditPage $page) => $page->indexable && $page->error === null && $page->status_code === 200);
+        $added = [];
+
+        foreach (['title_unique' => 'title_present', 'description_unique' => 'description_present'] as $key => $source) {
+            $values = [];
+
+            foreach ($candidates as $page) {
+                $check = collect((array) $page->checks)->firstWhere('key', $source);
+
+                if (is_array($check) && $check['passed'] && is_string($check['actual'] ?? null)) {
+                    $values[$page->id] = mb_strtolower(trim($check['actual']));
+                }
+            }
+
+            $groups = [];
+
+            foreach ($values as $id => $value) {
+                $groups[$value][] = $id;
+            }
+
+            foreach ($values as $id => $value) {
+                $others = array_values(array_diff($groups[$value], [$id]));
+                $labels = $candidates->whereIn('id', $others)->pluck('label')->take(3)->implode(', ');
+                $what = $key === 'title_unique' ? 'title' : 'description';
+
+                $added[$id][] = SeoCheckCatalog::row($key, $others === []
+                    ? ['passed' => true, 'actual' => 'unique', 'expected' => 'unique', 'message' => 'No other page uses this '.$what.'.']
+                    : ['passed' => false, 'actual' => 'same as '.$labels.(count($others) > 3 ? ' and '.(count($others) - 3).' more' : ''), 'expected' => 'unique', 'message' => 'Several pages share this '.$what.'. Search engines may show only one of them.'],
+                    true);
+            }
+        }
+
+        foreach ($candidates as $page) {
+            if (! isset($added[$page->id])) {
+                continue;
+            }
+
+            $checks = [...array_values(array_filter((array) $page->checks, static fn (array $check) => ! in_array($check['key'], ['title_unique', 'description_unique'], true))), ...$added[$page->id]];
+
+            $page->forceFill([
+                'checks' => $checks,
+                'score' => SeoCheckCatalog::score($checks) ?? 0,
+                'passed' => count(array_filter($checks, static fn (array $check) => $check['passed'])),
+                'failed' => count(array_filter($checks, static fn (array $check) => ! $check['passed'])),
+            ])->save();
+        }
     }
 
     public function fail(SeoAudit $audit, string $message): void

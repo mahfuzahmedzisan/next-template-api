@@ -12,6 +12,7 @@ use App\Services\Seo\Audit\SeoCheckCatalog;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -25,9 +26,10 @@ class SeoAuditController extends Controller
     {
         $validated = $request->validate([
             'include_noindex' => ['sometimes', 'boolean'],
+            'scope' => ['sometimes', 'string', Rule::in(SeoAudit::SCOPES)],
         ]);
 
-        $audit = $this->runner->start($request->user(), (bool) ($validated['include_noindex'] ?? false));
+        $audit = $this->runner->start($request->user(), (bool) ($validated['include_noindex'] ?? false), scope: $validated['scope'] ?? 'full');
 
         if ($audit === null) {
             return ApiResponse::error('An audit is already running.', Response::HTTP_CONFLICT, $this->latestPayload());
@@ -35,7 +37,7 @@ class SeoAuditController extends Controller
 
         Audit::log(
             AuditEvent::SeoAuditRequested,
-            properties: ['include_noindex' => $audit->include_noindex],
+            properties: ['include_noindex' => $audit->include_noindex, 'scope' => $audit->scope],
             subjectLabel: 'SEO audit #'.$audit->id,
         );
 
@@ -69,16 +71,29 @@ class SeoAuditController extends Controller
     }
 
     /**
-     * The newest audit (any status) plus the newest completed one with its pages.
+     * The newest audit (any status), the newest completed full audit with its
+     * pages, and the newest report of each section, which a sitemap- or
+     * robots-only run can refresh on its own.
      *
      * @return array<string, mixed>
      */
     private function latestPayload(): array
     {
         $current = SeoAudit::query()->latest('id')->first();
-        $completed = $current?->status === SeoAudit::COMPLETED
-            ? $current
-            : SeoAudit::query()->where('status', SeoAudit::COMPLETED)->latest('id')->first();
+        $completed = SeoAudit::query()->where('status', SeoAudit::COMPLETED)->where('scope', 'full')->latest('id')->first();
+        $sections = [];
+
+        foreach (['site' => 'site_checks', 'sitemap' => 'sitemap_report', 'robots' => 'robots_report'] as $section => $column) {
+            $source = SeoAudit::query()->where('status', SeoAudit::COMPLETED)->whereNotNull($column)->latest('id')->first(['id', 'scope', 'environment', 'finished_at', $column]);
+
+            $sections[$section] = $source === null ? null : [
+                ...(array) $source->{$column},
+                'audit_id' => $source->id,
+                'scope' => $source->scope,
+                'environment' => $source->environment,
+                'finished_at' => $source->finished_at?->toIso8601String(),
+            ];
+        }
 
         return [
             'current' => $current ? $this->auditRow($current) : null,
@@ -88,6 +103,7 @@ class SeoAuditController extends Controller
                 'pages' => $completed->pages()->orderByRaw('score is null')->orderBy('score')->orderBy('id')->get()
                     ->map(fn (SeoAuditPage $page) => $this->pageRow($page))->values(),
             ] : null,
+            'sections' => $sections,
             'categories' => SeoCheckCatalog::CATEGORIES,
         ];
     }
@@ -101,6 +117,7 @@ class SeoAuditController extends Controller
             'id' => $audit->id,
             'status' => $audit->status,
             'trigger' => $audit->trigger,
+            'scope' => $audit->scope,
             'site_url' => $audit->site_url,
             'environment' => $audit->environment,
             'include_noindex' => $audit->include_noindex,

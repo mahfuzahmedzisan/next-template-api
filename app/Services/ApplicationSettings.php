@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ApplicationSetting;
+use App\Services\Brand\FaviconSet;
 use App\Support\MediaUrl;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
@@ -169,6 +170,10 @@ final class ApplicationSettings
         if ($previous !== '' && $previous !== $path && self::ownsStoredFile($previous)) {
             Storage::disk('public')->delete($previous);
         }
+
+        if ($kind === 'favicon') {
+            $this->syncFaviconSet();
+        }
     }
 
     public function removeBrand(string $kind): void
@@ -212,6 +217,57 @@ final class ApplicationSettings
         if ($previous !== '' && $previous !== $stored && self::ownsStoredFile($previous)) {
             Storage::disk('public')->delete($previous);
         }
+
+        if ($kind === 'favicon' && $previous !== (string) $stored) {
+            $this->syncFaviconSet();
+        }
+    }
+
+    /**
+     * Rebuilds favicon.ico and the PNG icons from the current favicon source.
+     * The set is dropped when there is no source or GD cannot read it (SVG).
+     *
+     * @return array<string, string>|null
+     */
+    public function syncFaviconSet(): ?array
+    {
+        $previous = $this->get('general', 'favicon_set');
+        $source = $this->text('general', 'favicon_path', '');
+        $sets = app(FaviconSet::class);
+        $set = $source !== '' ? $sets->generate($source) : null;
+
+        if ($set === null) {
+            $this->forget('general', 'favicon_set');
+        } else {
+            $this->put('general', 'favicon_set', $set);
+        }
+
+        if (is_array($previous) && $previous !== $set) {
+            $sets->delete(array_diff($previous, $set ?? []));
+        }
+
+        return $set;
+    }
+
+    /**
+     * Public URLs of the generated favicon files, or null when the frontend
+     * should render them itself.
+     *
+     * @return array<string, string>|null
+     */
+    public function faviconSetUrls(): ?array
+    {
+        $set = $this->get('general', 'favicon_set');
+
+        if (! is_array($set) || ! is_string($set['favicon_ico'] ?? null)) {
+            return null;
+        }
+
+        return collect($set)
+            ->filter(fn ($path) => is_string($path))
+            ->map(fn (string $path) => $this->publicUrl($path))
+            ->filter()
+            ->all();
     }
 
     public function storeSmtpPassword(string $password): void

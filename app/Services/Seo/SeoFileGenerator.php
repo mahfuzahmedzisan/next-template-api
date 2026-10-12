@@ -3,6 +3,7 @@
 namespace App\Services\Seo;
 
 use App\Contracts\Seo\Seoable;
+use App\Jobs\Seo\NotifyFrontendRevalidate;
 use App\Models\SeoPage;
 use App\Support\Seo\SeoUrl;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -22,6 +23,8 @@ use Spatie\Sitemap\Tags\Url;
 final class SeoFileGenerator
 {
     public const FILES = ['sitemap', 'robots', 'llms'];
+
+    public const FRONTEND_TAG = 'seo-files';
 
     private const DIRECTORY = 'seo';
 
@@ -52,6 +55,9 @@ final class SeoFileGenerator
 
             $this->settings->recordFile($name, $meta[$name]);
         }
+
+        // The frontend caches these files under their own tag; refresh it only once they are rewritten.
+        NotifyFrontendRevalidate::dispatch([self::FRONTEND_TAG]);
 
         return $meta;
     }

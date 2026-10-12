@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\Bus;
 use Throwable;
 
 /**
- * Scans every indexable page and record of the public site. Small sites are
- * scanned inline; above the batch threshold the URLs are split into chunk
- * jobs and the audit is scored when the batch finishes.
+ * Scans robots.txt, the sitemap and site-wide settings, then (full scope)
+ * every indexable page and record. Small sites are scanned inline; above the
+ * batch threshold the URLs are split into chunk jobs and the audit is scored
+ * when the batch finishes.
  */
 class RunSeoAudit implements ShouldBeUnique, ShouldQueue
 {
@@ -56,29 +57,30 @@ class RunSeoAudit implements ShouldBeUnique, ShouldQueue
         $siteUrl = $runner->siteUrl();
         $targets = $runner->targets($audit->include_noindex);
         $development = $runner->isDevelopment($siteUrl);
+        $full = $audit->scope === 'full';
 
         $audit->forceFill([
             'status' => SeoAudit::RUNNING,
             'site_url' => $siteUrl,
-            'pages_total' => count($targets),
+            'pages_total' => $full ? count($targets) : 0,
             'started_at' => now(),
         ])->save();
 
-        if ($targets === []) {
-            $runner->finalize($audit);
-
-            return;
-        }
-
-        if ($development) {
+        if ($development && $full) {
             $runner->warmUp(array_column($targets, 'url'));
-        } else {
-            $sample = $runner->warmUp([$targets[0]['url']]);
+        } elseif (! $development) {
+            $sample = $runner->warmUp([$targets[0]['url'] ?? $siteUrl]);
             $development = $runner->isDevelopment($siteUrl, $sample);
         }
 
         $audit->forceFill(['environment' => $development ? 'development' : 'production'])->save();
-        $robots = $runner->robots($siteUrl);
+        $robots = $runner->scanSections($audit, $targets);
+
+        if (! $full || $targets === []) {
+            $runner->finalize($audit);
+
+            return;
+        }
 
         if (count($targets) <= (int) config('seo.audit.batch_threshold', 25)) {
             $runner->scanTargets($audit, $targets, $robots);

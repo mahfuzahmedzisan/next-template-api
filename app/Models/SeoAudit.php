@@ -9,14 +9,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * One SEO health scan of the public site.
+ * One SEO health scan of the public site: every page plus the site, robots.txt
+ * and sitemap sections (full), or only the sitemap or robots.txt.
  *
  * @property array<string, mixed>|null $summary
+ * @property array<string, mixed>|null $site_checks
+ * @property array<string, mixed>|null $robots_report
+ * @property array<string, mixed>|null $sitemap_report
  */
 #[Fillable([
-    'status', 'trigger', 'triggered_by', 'site_url', 'environment', 'include_noindex', 'score',
+    'status', 'trigger', 'scope', 'triggered_by', 'site_url', 'environment', 'include_noindex', 'score',
     'pages_total', 'pages_scanned', 'pages_failed', 'checks_passed', 'checks_failed',
-    'summary', 'error', 'started_at', 'finished_at',
+    'summary', 'site_checks', 'robots_report', 'sitemap_report', 'error', 'started_at', 'finished_at',
 ])]
 class SeoAudit extends Model
 {
@@ -28,12 +32,17 @@ class SeoAudit extends Model
 
     public const FAILED = 'failed';
 
+    public const SCOPES = ['full', 'sitemap', 'robots'];
+
     protected function casts(): array
     {
         return [
             'include_noindex' => 'boolean',
             'score' => 'integer',
             'summary' => 'array',
+            'site_checks' => 'array',
+            'robots_report' => 'array',
+            'sitemap_report' => 'array',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];

@@ -22,78 +22,6 @@ beforeEach(function (): void {
     Http::preventStrayRequests();
 });
 
-function auditPage(string $path, array $attributes = []): SeoPage
-{
-    return SeoPage::withoutEvents(fn () => SeoPage::query()->create([
-        'path' => $path,
-        'label' => ucfirst(trim($path, '/')) ?: 'Home',
-        'page_type' => $path === '/' ? 'home' : 'about',
-        ...$attributes,
-    ]));
-}
-
-function healthyHtml(string $origin, string $path, array $replace = []): string
-{
-    $html = <<<HTML
-    <!doctype html>
-    <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>About the Northwind team and how we work</title>
-      <meta name="description" content="Northwind builds calm, fast tools for small sales teams. Meet the people and the ideas behind them.">
-      <meta name="keywords" content="crm, sales">
-      <meta name="author" content="Northwind Team">
-      <meta name="robots" content="index, follow">
-      <link rel="canonical" href="{$origin}{$path}">
-      <meta property="og:title" content="About Northwind">
-      <meta property="og:description" content="Who we are">
-      <meta property="og:url" content="{$origin}{$path}">
-      <meta property="og:image" content="{$origin}/og">
-      <meta name="twitter:card" content="summary_large_image">
-      <script type="application/ld+json">{"@context":"https://schema.org","@type":"AboutPage","name":"About"}</script>
-    </head>
-    <body>
-      <main>
-        <h1>About Northwind</h1>
-        <h2>Our story</h2>
-        <p>We build software.</p>
-        <img src="/api/storage/team.jpg" alt="The team">
-        <a href="/contact">Contact us</a>
-      </main>
-    </body>
-    </html>
-    HTML;
-
-    return strtr($html, $replace);
-}
-
-/**
- * @param  array<string, mixed>  $pages  path => html|Closure
- */
-function fakeSite(string $origin, array $pages, array $headers = []): void
-{
-    $fakes = [
-        $origin.'/robots.txt' => Http::response("User-agent: *\nDisallow: /admin\nAllow: /\n", 200),
-        $origin.'/og' => Http::response('', 200),
-        $origin.'/api/storage/*' => Http::response('', 200),
-        $origin.'/contact' => Http::response('', 200),
-    ];
-
-    foreach ($pages as $path => $html) {
-        $fakes[$origin.$path] = $html instanceof Closure ? $html : Http::response($html, 200, ['Content-Type' => 'text/html; charset=utf-8', ...$headers]);
-    }
-
-    Http::fake($fakes);
-}
-
-function runAudit(bool $includeNoindex = false): SeoAudit
-{
-    $audit = app(SeoAuditRunner::class)->start(null, $includeNoindex);
-
-    return $audit->refresh();
-}
-
 it('scores a healthy production page at 100 and ranks real issues', function (): void {
     app(SeoSettings::class)->update(['site_url' => 'https://northwind.example']);
     auditPage('/about');
@@ -102,8 +30,8 @@ it('scores a healthy production page at 100 and ranks real issues', function ():
     fakeSite('https://northwind.example', [
         '/about' => healthyHtml('https://northwind.example', '/about'),
         '/team' => healthyHtml('https://northwind.example', '/team', [
-            '<meta name="description" content="Northwind builds calm, fast tools for small sales teams. Meet the people and the ideas behind them.">' => '',
-            '<h1>About Northwind</h1>' => '<h1>One</h1><h1>Two</h1>',
+            '<meta name="description"' => '<meta name="summary"',
+            '<h1>Team Northwind</h1>' => '<h1>Team Northwind</h1><h1>Two</h1>',
         ]),
     ], ['Content-Encoding' => 'gzip', 'Strict-Transport-Security' => 'max-age=31536000']);
 
@@ -114,7 +42,11 @@ it('scores a healthy production page at 100 and ranks real issues', function ():
         ->and($audit->environment)->toBe('production')
         ->and($pages['https://northwind.example/about']->score)->toBe(100)
         ->and($pages['https://northwind.example/team']->score)->toBeLessThan(100)
-        ->and($audit->score)->toBe((int) round(($pages['https://northwind.example/about']->score + $pages['https://northwind.example/team']->score) / 2));
+        ->and(sectionScore($audit, 'pages'))->toBe((int) round(($pages['https://northwind.example/about']->score + $pages['https://northwind.example/team']->score) / 2))
+        ->and(sectionScore($audit, 'site'))->toBe(100)
+        ->and(sectionScore($audit, 'sitemap'))->toBe(100)
+        ->and(sectionScore($audit, 'robots'))->toBe(100)
+        ->and($audit->score)->toBe((int) round((sectionScore($audit, 'pages') * 70 + 3000) / 100));
 
     $issues = collect($audit->summary['issues'])->keyBy('key');
 
@@ -150,24 +82,102 @@ it('sends a warm-up request to every URL before a development scan', function ()
 
     runAudit();
 
-    $gets = Http::recorded(fn (Request $request) => $request->method() === 'GET' && $request->url() === 'http://localhost:3000/about');
+    $gets = Http::recorded(fn (Request $request) => $request->method() === 'GET'
+        && $request->url() === 'http://localhost:3000/about'
+        && str_contains($request->header('User-Agent')[0] ?? '', 'MahfuzSeoScanner'));
 
-    expect($gets)->toHaveCount(2);
+    // Warm-up, the sitemap's URL check, then the page scan.
+    expect($gets)->toHaveCount(3)
+        ->and(Http::recorded()->first()[0]->url())->toBe('http://localhost:3000/about');
 });
 
-it('runs content length only on detail pages and skips configured checks per page type', function (): void {
+it('runs content length on every page type and skips configured checks per page type', function (): void {
     $auth = SeoCheckCatalog::forPage('page', 'auth', true);
     $about = SeoCheckCatalog::forPage('page', 'about', true);
-    $blog = SeoCheckCatalog::forPage('model', 'blog', true);
+    $post = SeoCheckCatalog::forPage('model', 'post', true);
 
-    expect($about)->not->toContain('content_length')
-        ->and($blog)->toContain('content_length')
-        ->and($auth)->not->toContain('h2_present', 'internal_links', 'og_image')
+    expect($about)->toContain('content_length', 'headings', 'head_metadata', 'og_image_meta', 'breadcrumbs')
+        ->not->toContain('title_unique', 'description_unique')
+        ->and($post)->toContain('content_length')
+        ->and($auth)->not->toContain('headings', 'internal_links', 'og_image', 'content_length')
+        ->and(SeoCheckCatalog::minWords('home'))->toBe(800)
+        ->and(SeoCheckCatalog::minWords('unknown'))->toBe(300)
+        ->and(SeoCheckCatalog::get('title_length')['label'])->toBe('Title is 50–60 characters')
         ->and(SeoCheckCatalog::forPage('page', 'about', false))->toBe(SeoCheckCatalog::NOINDEX_CHECKS);
 
     foreach (['keywords_meta', 'author_meta'] as $key) {
         expect(SeoCheckCatalog::get($key))->toMatchArray(['weight' => 1, 'informational' => true]);
     }
+});
+
+it('fails a 1200x630 social image and size tags that do not match the image', function (): void {
+    auditPage('/about');
+    fakeSite('http://localhost:3000', ['/about' => healthyHtml('http://localhost:3000', '/about')], ogImage: [1200, 630]);
+
+    $audit = runAudit();
+    $image = auditCheck($audit, 'http://localhost:3000/about', 'og_image');
+    $meta = auditCheck($audit, 'http://localhost:3000/about', 'og_image_meta');
+
+    expect($image['passed'])->toBeFalse()
+        ->and($image['actual'])->toContain('1200x630')
+        ->and($meta['passed'])->toBeFalse()
+        ->and($meta['actual'])->toBe('tags 1200x628, image 1200x630');
+});
+
+it('flags titles and descriptions shared by several pages', function (): void {
+    auditPage('/about');
+    auditPage('/team');
+    $origin = 'http://localhost:3000';
+    fakeSite($origin, [
+        '/about' => healthyHtml($origin, '/about'),
+        '/team' => healthyHtml($origin, '/team', ['<title>Team page' => '<title>About page']),
+    ]);
+
+    $audit = runAudit();
+    $title = auditCheck($audit, $origin.'/team', 'title_unique');
+
+    expect($title['passed'])->toBeFalse()
+        ->and($title['actual'])->toBe('same as About')
+        ->and(auditCheck($audit, $origin.'/team', 'description_unique')['passed'])->toBeTrue()
+        ->and($audit->pages()->where('url', $origin.'/team')->first()->score)->toBeLessThan(100)
+        ->and(collect($audit->summary['issues'])->pluck('key'))->toContain('title_unique');
+});
+
+it('catches metadata that Next.js streams into the body for browsers', function (): void {
+    auditPage('/about');
+    $origin = 'http://localhost:3000';
+    $html = healthyHtml($origin, '/about');
+    $streamed = strtr(preg_replace('#<title>.*?</title>#', '', $html), ['<body>' => '<body><title>About</title>']);
+
+    fakeSite($origin, ['/about' => fn (Request $request) => Http::response(
+        str_contains($request->header('User-Agent')[0] ?? '', 'Chrome') ? $streamed : $html,
+        200,
+        ['Content-Type' => 'text/html'],
+    )]);
+
+    $check = auditCheck(runAudit(), $origin.'/about', 'head_metadata');
+
+    expect($check['passed'])->toBeFalse()
+        ->and($check['actual'])->toContain('title')
+        ->and($check['message'])->toContain('streamed into <body>');
+});
+
+it('requires the schema properties each type needs and a clean heading outline', function (): void {
+    auditPage('/about');
+    $origin = 'http://localhost:3000';
+    fakeSite($origin, ['/about' => healthyHtml($origin, '/about', [
+        '"@type":"AboutPage"' => '"@type":"Article"',
+        '<h3>Where it started</h3>' => '<h3>Where it started</h3><h5>Too deep</h5>',
+    ])]);
+
+    $audit = runAudit();
+    $schema = auditCheck($audit, $origin.'/about', 'structured_data');
+    $headings = auditCheck($audit, $origin.'/about', 'headings');
+
+    expect($schema['passed'])->toBeFalse()
+        ->and($schema['actual'])->toContain('Article missing headline, image, datePublished, author')
+        ->and($headings['passed'])->toBeFalse()
+        ->and($headings['actual'])->toBe('H3 followed by H5');
 });
 
 it('keeps informational checks out of the top issues', function (): void {
@@ -184,6 +194,7 @@ it('keeps informational checks out of the top issues', function (): void {
 
 it('skips noindex pages by default and never scores them when included', function (): void {
     $this->seed(SeoPageSeeder::class);
+    SeoPage::query()->whereNotIn('page_type', ['home', 'auth'])->delete();
     $origin = 'http://localhost:3000';
     $noindex = healthyHtml($origin, '/login', ['<meta name="robots" content="index, follow">' => '<meta name="robots" content="noindex, nofollow">']);
 
@@ -228,7 +239,8 @@ it('stores a page that times out as an error without failing the audit', functio
         ->and($audit->pages_failed)->toBe(1)
         ->and($slow->error)->toContain('did not answer')
         ->and($slow->score)->toBeNull()
-        ->and($audit->score)->toBe(100);
+        ->and(sectionScore($audit, 'pages'))->toBe(100)
+        ->and(sectionScore($audit, 'sitemap'))->toBeLessThan(100);
 });
 
 it('scans large sites in batch chunks', function (): void {
@@ -245,6 +257,41 @@ it('scans large sites in batch chunks', function (): void {
     expect($audit->status)->toBe(SeoAudit::COMPLETED)
         ->and($audit->pages_scanned)->toBe(2)
         ->and($audit->score)->toBe(100);
+});
+
+it('scores every section at 100 for a healthy development site', function (): void {
+    auditPage('/about');
+    fakeSite('http://localhost:3000', ['/about' => healthyHtml('http://localhost:3000', '/about')]);
+
+    $audit = runAudit();
+
+    expect($audit->score)->toBe(100)
+        ->and(collect($audit->summary['sections'])->pluck('score', 'key')->all())->toBe(['pages' => 100, 'site' => 100, 'sitemap' => 100, 'robots' => 100])
+        ->and($audit->site_checks['checks'])->not->toBeEmpty()
+        ->and($audit->sitemap_report['details']['urls'])->toBe(1);
+});
+
+it('runs only robots.txt, or robots.txt and the sitemap, for a scoped audit', function (): void {
+    auditPage('/about');
+    fakeSite('http://localhost:3000', ['/about' => healthyHtml('http://localhost:3000', '/about')], overrides: [
+        '/robots.txt' => Http::response("User-agent: *\nDisallow: /\nNoindex: /x\n", 200, ['Content-Type' => 'text/plain']),
+    ]);
+
+    $robots = runAudit(scope: 'robots');
+
+    expect($robots->scope)->toBe('robots')
+        ->and($robots->pages()->count())->toBe(0)
+        ->and($robots->sitemap_report)->toBeNull()
+        ->and($robots->site_checks)->toBeNull()
+        ->and($robots->score)->toBe($robots->robots_report['score'])
+        ->and(collect($robots->robots_report['checks'])->where('passed', false)->pluck('key')->all())
+        ->toContain('robots_syntax', 'robots_not_blocking_site', 'robots_pages_allowed', 'robots_sitemap_declared');
+
+    $sitemap = runAudit(scope: 'sitemap');
+
+    expect($sitemap->sitemap_report)->not->toBeNull()
+        ->and($sitemap->site_checks)->toBeNull()
+        ->and(collect($sitemap->summary['sections'])->pluck('score', 'key')->only(['pages', 'site'])->filter()->all())->toBe([]);
 });
 
 it('queues the audit on the SEO connection with a single try and a unique lock', function (): void {
@@ -273,6 +320,13 @@ it('lets an admin start one audit at a time and read the results', function (): 
         ->assertJsonPath('data.current.status', SeoAudit::QUEUED);
 
     actingAsSanctum($admin)->postJson('/api/v1/admin/seo/audits')->assertConflict();
+    actingAsSanctum($admin)->postJson('/api/v1/admin/seo/audits', ['scope' => 'everything'])->assertUnprocessable();
+
+    SeoAudit::query()->update(['status' => SeoAudit::COMPLETED]);
+
+    actingAsSanctum($admin)->postJson('/api/v1/admin/seo/audits', ['scope' => 'sitemap'])
+        ->assertAccepted()
+        ->assertJsonPath('data.current.scope', 'sitemap');
 
     $this->assertDatabaseHas('activity_log', ['event' => 'seo.audit_requested']);
 });

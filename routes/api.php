@@ -11,8 +11,10 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BroadcastAuthController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
+use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\ProfileActivityController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\RealtimeController;
 use App\Http\Controllers\Api\V1\SeoController;
 use App\Http\Controllers\Api\V1\TwoFactorAuthenticationController;
@@ -21,6 +23,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('settings/public', [ApplicationSettingsController::class, 'publicShow']);
+
+Route::get('projects', [ProjectController::class, 'index']);
+Route::get('projects/{slug}', [ProjectController::class, 'show'])->where('slug', '[a-z0-9-]+');
+Route::get('posts', [PostController::class, 'index']);
+Route::get('posts/{slug}', [PostController::class, 'show'])->where('slug', '[a-z0-9-]+');
 
 Route::get('seo/page', [SeoController::class, 'page']);
 Route::get('seo/{file}', [SeoController::class, 'file'])

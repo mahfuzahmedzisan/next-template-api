@@ -11,6 +11,7 @@ use App\Http\Resources\SeoPageResource;
 use App\Jobs\Seo\ProbeSeoPath;
 use App\Models\SeoPage;
 use App\Rules\SafeSiteUrl;
+use App\Services\Seo\Audit\SeoCheckCatalog;
 use App\Services\Seo\SeoFileGenerator;
 use App\Services\Seo\SeoSettings;
 use App\Support\ApiResponse;
@@ -275,6 +276,9 @@ class SeoController extends Controller
                 'image_previews' => SeoFields::IMAGE_PREVIEW,
                 'affix_modes' => SeoFields::AFFIX_MODES,
                 'placeholders' => SeoSettings::PLACEHOLDERS,
+                'lengths' => collect(['title', 'description'])
+                    ->mapWithKeys(fn (string $name) => [$name => array_combine(['min', 'max'], SeoCheckCatalog::range($name))])
+                    ->all(),
             ],
         ];
     }

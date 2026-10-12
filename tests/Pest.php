@@ -7,6 +7,8 @@ use Laravel\Fortify\Fortify;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
+require_once __DIR__.'/Support/SeoFixtures.php';
+
 /*
 |--------------------------------------------------------------------------
 | Test Case

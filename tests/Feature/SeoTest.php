@@ -284,7 +284,7 @@ it('seeds built-in pages without overwriting admin edits', function (): void {
     $this->seed(SeoPageSeeder::class);
 
     expect(SeoPage::query()->where('path', '/')->value('meta_title'))->toBe('Edited by admin')
-        ->and(SeoPage::query()->count())->toBe(6)
+        ->and(SeoPage::query()->count())->toBe(13)
         ->and(SeoPage::query()->where('path', '/login')->value('robots_index'))->toBeFalse();
 });
 
@@ -299,9 +299,9 @@ it('fills empty starter copy on existing pages and keeps edited fields', functio
     $home = $resolver->forPath('/');
     $login = $resolver->forPath('/login');
 
-    expect($home['title'])->toBe('Northwind — Private workspace and portfolio')
-        ->and(mb_strlen($home['description']))->toBeGreaterThanOrEqual(70)->toBeLessThanOrEqual(160)
-        ->and($home['keywords'])->toContain('portfolio')
+    expect($home['title'])->toBe('Mahfuz Ahmed: Full-Stack Developer for Next.js and Laravel')
+        ->and(mb_strlen($home['description']))->toBeGreaterThanOrEqual(140)->toBeLessThanOrEqual(160)
+        ->and($home['keywords'])->toContain('full-stack developer')
         ->and($login['title'])->toBe('Log in - Northwind')
         ->and($login['description'])->toContain('Sign in to your Northwind workspace')
         ->and($resolver->forPath('/register')['title'])->toBe('Create your account - Northwind');
@@ -311,6 +311,47 @@ it('fills empty starter copy on existing pages and keeps edited fields', functio
     $this->seed(SeoPageSeeder::class);
 
     Event::assertDispatchedTimes(SeoInvalidated::class, 1);
+});
+
+it('seeds every public page with strict-length, unique SEO copy', function (): void {
+    $this->seed(SeoPageSeeder::class);
+
+    $resolver = app(SeoResolver::class);
+    $pages = collect((new SeoPageSeeder)->publicPages())->keys()->mapWithKeys(fn (string $path) => [$path => $resolver->forPath($path)]);
+
+    expect($pages->keys()->all())->toBe(['/', '/about', '/services', '/projects', '/blog', '/contact', '/privacy-policy', '/terms']);
+
+    foreach ($pages as $path => $seo) {
+        expect(mb_strlen($seo['title']))->toBeBetween(50, 60, $path.' title: '.$seo['title'])
+            ->and(mb_strlen($seo['description']))->toBeBetween(140, 160, $path.' description: '.$seo['description'])
+            ->and($seo['keywords'])->not->toBeEmpty()
+            ->and($seo['sitemap']['include'])->toBeTrue();
+    }
+
+    expect($pages->pluck('title')->unique())->toHaveCount(8)
+        ->and($pages->pluck('description')->unique())->toHaveCount(8)
+        ->and($pages['/about']['schema']['type'])->toBe('AboutPage')
+        ->and($pages['/projects']['schema']['type'])->toBe('CollectionPage')
+        ->and($pages['/contact']['schema']['type'])->toBe('ContactPage')
+        ->and(SeoPage::query()->where('path', '/terms')->value('page_type'))->toBe('legal');
+});
+
+it('upgrades home copy an older seeder wrote but keeps admin edits', function (): void {
+    seoPage([
+        'path' => '/',
+        'label' => 'Home',
+        'page_type' => 'home',
+        'meta_title' => '{{site_name}} — Private workspace and portfolio',
+        'meta_description' => 'A description the admin wrote for the home page by hand.',
+    ]);
+
+    $this->seed(SeoPageSeeder::class);
+
+    $home = SeoPage::query()->where('path', '/')->first();
+
+    expect($home->meta_title)->toBe('Mahfuz Ahmed: Full-Stack Developer for Next.js and Laravel')
+        ->and($home->title_affix_mode)->toBe('none')
+        ->and($home->meta_description)->toBe('A description the admin wrote for the home page by hand.');
 });
 
 it('keeps built-in pages from being removed or moved', function (): void {
