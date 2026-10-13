@@ -140,9 +140,10 @@ class MediaController extends Controller
     {
         $title = trim($request->string('title')->toString());
         $count = min(10, max(1, $request->integer('count', 1)));
+        $except = $request->integer('except') ?: null;
 
         return $this->apiSuccess('Slugs prepared.', [
-            'slugs' => $title === '' ? [] : MediaItem::nextSlugs($title, $count),
+            'slugs' => $title === '' ? [] : MediaItem::nextSlugs($title, $count, $except),
         ]);
     }
 
@@ -218,16 +219,53 @@ class MediaController extends Controller
             return $this->apiUnprocessable('That slug is already in use.');
         }
 
+        $renamed = $this->renameSourceToSlug($mediaItem, $slug);
+
         $mediaItem->forceFill([
             'title' => $request->string('title')->toString(),
             'slug' => $slug,
             'alt' => $request->input('alt'),
             'keywords' => MediaItem::normalizeKeywords($request->input('keywords', []) ?? []),
-        ])->save();
+        ]);
+
+        if ($renamed) {
+            $mediaItem->updated_at = now();
+        }
+
+        $mediaItem->save();
 
         return $this->apiSuccess('Media updated successfully.', [
             'media' => (new MediaResource($mediaItem))->resolve(),
         ]);
+    }
+
+    /**
+     * Renames the stored file to "<slug>.<ext>" so its URL follows the slug.
+     * Streams keep their HLS path. Old URLs are redirected by the storage proxy.
+     */
+    private function renameSourceToSlug(MediaItem $mediaItem, string $slug): bool
+    {
+        if ($mediaItem->kind->streamsAsHls()) {
+            return false;
+        }
+
+        $source = $mediaItem->getFirstMedia('source');
+
+        if ($source === null) {
+            return false;
+        }
+
+        $extension = strtolower(pathinfo((string) $source->file_name, PATHINFO_EXTENSION));
+        $fileName = $extension === '' ? $slug : $slug.'.'.$extension;
+
+        if ($source->file_name === $fileName) {
+            return false;
+        }
+
+        $source->file_name = $fileName;
+        $source->save();
+
+        return true;
     }
 
     public function destroy(MediaItem $mediaItem): JsonResponse

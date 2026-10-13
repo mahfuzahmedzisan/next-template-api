@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\ApplicationSettingsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BroadcastAuthController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\MediaFileController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\ProfileActivityController;
@@ -23,6 +24,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('settings/public', [ApplicationSettingsController::class, 'publicShow']);
+Route::get('media/files/{media}', [MediaFileController::class, 'show'])
+    ->whereNumber('media')
+    ->middleware('throttle:120,1');
 
 Route::get('projects', [ProjectController::class, 'index']);
 Route::get('projects/{slug}', [ProjectController::class, 'show'])->where('slug', '[a-z0-9-]+');
