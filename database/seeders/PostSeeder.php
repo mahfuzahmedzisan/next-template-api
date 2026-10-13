@@ -15,7 +15,7 @@ class PostSeeder extends Seeder
 {
     use SeedsContent;
 
-    private const AUTHOR = 'Mahfuz Ahmed';
+    private const AUTHOR = 'Next Template';
 
     public function run(): void
     {
@@ -62,7 +62,7 @@ class PostSeeder extends Seeder
 
 If you want to try these ideas, start small. Pick one screen, one job or one page in a project you already know well, apply a single change from this post and measure the result for a couple of weeks. Small, measured changes are easier to explain to a team and much easier to undo if they do not work.
 
-I write these notes from real client work, so every recommendation here has been tested on a production system. If you have a question about {$topic}, a different experience to share, or a project where these ideas could help, the contact page is the quickest way to reach me, and I read every message.
+We write these notes from real client work, so every recommendation here has been tested on a production system. If you have a question about {$topic}, a different experience to share, or a project where these ideas could help, the contact page is the quickest way to reach us, and we read every message.
 MD;
     }
 
@@ -95,16 +95,16 @@ MD;
                 'category' => 'Engineering',
                 'hue' => 200,
                 'tags' => ['Next.js', 'Laravel', 'Architecture', 'Security'],
-                'excerpt' => 'Why I put a thin backend-for-frontend between the browser and a Laravel API, what it handles, and the mistakes that taught me where its boundaries should be.',
+                'excerpt' => 'Why we put a thin backend-for-frontend between the browser and a Laravel API, what it handles, and the mistakes that taught us where its boundaries should be.',
                 'seo_title' => 'Building a Backend-for-Frontend with Next.js and Laravel',
-                'seo_description' => 'Why I put a thin backend-for-frontend between the browser and a Laravel API, what it should handle, and the mistakes that showed me where its limits should be.',
+                'seo_description' => 'Why we put a thin backend-for-frontend between the browser and a Laravel API, what it should handle, and the mistakes that showed us where its limits should be.',
                 'keywords' => ['backend for frontend', 'Next.js Laravel', 'API security', 'BFF pattern'],
                 'body' => <<<'MD'
-Most of my recent projects pair a Next.js front end with a Laravel API. For a long time the browser talked to the API directly, with a token stored somewhere in JavaScript. It worked, but every project ended with the same uncomfortable questions about token storage, CORS rules and leaking internal URLs. A backend-for-frontend, or BFF, answers most of those questions by putting a small server layer that belongs to the front end between the browser and the API.
+Most of our recent projects pair a Next.js front end with a Laravel API. For a long time the browser talked to the API directly, with a token stored somewhere in JavaScript. It worked, but every project ended with the same uncomfortable questions about token storage, CORS rules and leaking internal URLs. A backend-for-frontend, or BFF, answers most of those questions by putting a small server layer that belongs to the front end between the browser and the API.
 
 ## What the BFF is responsible for
 
-The BFF is not a second backend. It owns a short list of jobs, and I keep that list written down in every project so it does not grow quietly.
+The BFF is not a second backend. It owns a short list of jobs, and we keep that list written down in every project so it does not grow quietly.
 
 ### Sessions and tokens
 
@@ -116,7 +116,7 @@ Every request from the BFF carries a shared secret and the origin the visitor ac
 
 ### Shaping responses
 
-The BFF can combine two API calls into one response, rewrite storage URLs so media is served from the same origin, and strip fields the page does not need. It should not contain business rules. If I catch myself writing a permission check in the BFF, that check belongs in Laravel.
+The BFF can combine two API calls into one response, rewrite storage URLs so media is served from the same origin, and strip fields the page does not need. It should not contain business rules. If we catch ourselves writing a permission check in the BFF, that check belongs in Laravel.
 
 ## What stays in Laravel
 
@@ -124,9 +124,9 @@ Validation, authorization, queues, notifications, search indexing and anything t
 
 ## Mistakes that shaped the boundaries
 
-- I once cached a user-specific response in a shared cache. The fix was simple, but it taught me to mark every BFF fetch as either public or private from the start.
-- I let the BFF format dates and currencies for a while. It felt convenient until the API needed the same formatting for emails. Formatting now lives in the API or in shared front-end helpers, never in both.
-- I forgot that public pages calling the session become dynamic. Moving the account button into a small client component let the rest of the page be cached again.
+- We once cached a user-specific response in a shared cache. The fix was simple, but it taught us to mark every BFF fetch as either public or private from the start.
+- We let the BFF format dates and currencies for a while. It felt convenient until the API needed the same formatting for emails. Formatting now lives in the API or in shared front-end helpers, never in both.
+- We forgot that public pages calling the session become dynamic. Moving the account button into a small client component let the rest of the page be cached again.
 
 ## Performance and caching
 
@@ -147,12 +147,12 @@ MD,
                 'category' => 'SEO',
                 'hue' => 140,
                 'tags' => ['SEO', 'Next.js', 'Metadata', 'Performance'],
-                'excerpt' => 'The checklist I run before launching a Next.js site: metadata, social images, favicons, sitemaps, robots rules, structured data and the details third-party checkers flag.',
+                'excerpt' => 'The checklist we run before launching a Next.js site: metadata, social images, favicons, sitemaps, robots rules, structured data and the details third-party checkers flag.',
                 'seo_title' => 'A Practical SEO Checklist for Launching Next.js Apps',
-                'seo_description' => 'The SEO checklist I run before launching any Next.js site: metadata, social images, favicons, sitemaps, robots rules, structured data and what checkers flag.',
+                'seo_description' => 'The SEO checklist we run before launching any Next.js site: metadata, social images, favicons, sitemaps, robots rules, structured data and what checkers flag.',
                 'keywords' => ['Next.js SEO', 'SEO checklist', 'structured data', 'sitemap robots.txt'],
                 'body' => <<<'MD'
-Search engines and social networks are strict readers. They do not care how elegant your components are; they read the HTML your server returns, follow your redirects and fetch your images. This is the checklist I run before every launch. None of it is glamorous, and all of it is easy to forget.
+Search engines and social networks are strict readers. They do not care how elegant your components are; they read the HTML your server returns, follow your redirects and fetch your images. This is the checklist we run before every launch. None of it is glamorous, and all of it is easy to forget.
 
 ## Metadata on every page
 
@@ -210,7 +210,7 @@ MD,
                 'seo_description' => 'Lessons from building an inspection app for places with no signal: save locally first, sync in order, show honest status and keep every server write idempotent.',
                 'keywords' => ['offline-first forms', 'IndexedDB', 'background sync', 'progressive web app'],
                 'body' => <<<'MD'
-Losing a half-finished form is one of the most frustrating things software can do to a person. It happens most often to people working in the field, in basements, on trains or in rural areas, where the connection comes and goes. While building an inspection app for surveyors, I learned that offline-first forms are less about clever technology and more about a few firm rules.
+Losing a half-finished form is one of the most frustrating things software can do to a person. It happens most often to people working in the field, in basements, on trains or in rural areas, where the connection comes and goes. While building an inspection app for surveyors, we learned that offline-first forms are less about clever technology and more about a few firm rules.
 
 ## Rule one: save locally before anything else
 
@@ -242,11 +242,11 @@ Retries mean the server will sometimes receive the same operation twice. Each op
 
 ## Conflicts are rarer than you think
 
-I expected conflicts to be the hardest part. In practice, one person usually owns a record while they work on it. A simple rule, where the latest change to each field wins and every change is kept in a history, covered almost every real case.
+We expected conflicts to be the hardest part. In practice, one person usually owns a record while they work on it. A simple rule, where the latest change to each field wins and every change is kept in a history, covered almost every real case.
 
 ## Testing on real devices
 
-Emulators lie about storage limits and battery savers. Test on the cheapest device your users actually carry, fill its storage, switch it to airplane mode in the middle of an upload and see what happens. Every bug I found this way would have reached production otherwise.
+Emulators lie about storage limits and battery savers. Test on the cheapest device your users actually carry, fill its storage, switch it to airplane mode in the middle of an upload and see what happens. Every bug we found this way would have reached production otherwise.
 
 ## Wrapping up
 
@@ -259,20 +259,20 @@ MD,
                 'category' => 'Engineering',
                 'hue' => 280,
                 'tags' => ['Laravel', 'Queues', 'Redis', 'DevOps'],
-                'excerpt' => 'What I learned from running Laravel queues for real traffic: separate connections, sensible timeouts, idempotent jobs, honest monitoring and calm deploys.',
+                'excerpt' => 'What we learned from running Laravel queues for real traffic: separate connections, sensible timeouts, idempotent jobs, honest monitoring and calm deploys.',
                 'seo_title' => 'Running Laravel Queue Workers in Production: Lessons',
-                'seo_description' => 'What I learned running Laravel queues under real traffic: separate connections, sensible timeouts, idempotent jobs, honest monitoring and calm, boring deploys.',
+                'seo_description' => 'What we learned running Laravel queues under real traffic: separate connections, sensible timeouts, idempotent jobs, honest monitoring and calm, boring deploys.',
                 'keywords' => ['Laravel queues', 'queue workers', 'Redis queue', 'production Laravel'],
                 'body' => <<<'MD'
-Queues are where Laravel applications do their quiet, important work: sending emails, importing files, generating reports and keeping search indexes fresh. They are also where problems hide, because a failed job does not show an error page to anyone. These are the lessons I keep relearning, written down so I stop relearning them.
+Queues are where Laravel applications do their quiet, important work: sending emails, importing files, generating reports and keeping search indexes fresh. They are also where problems hide, because a failed job does not show an error page to anyone. These are the lessons we keep relearning, written down so we stop relearning them.
 
 ## Separate connections for separate jobs
 
-Not all jobs are equal. A password reset email must go out within seconds, while a nightly report can wait. I give long-running work its own queue connection and its own workers, so a slow import never delays a login email.
+Not all jobs are equal. A password reset email must go out within seconds, while a nightly report can wait. We give long-running work its own queue connection and its own workers, so a slow import never delays a login email.
 
 ### Match retry settings to timeouts
 
-The connection's retry setting must be longer than the longest job timeout. If it is shorter, the queue assumes a slow job has died and hands it to another worker, and the job runs twice. This single setting has caused more duplicate emails than any bug I have written.
+The connection's retry setting must be longer than the longest job timeout. If it is shorter, the queue assumes a slow job has died and hands it to another worker, and the job runs twice. This single setting has caused more duplicate emails than any bug we have written.
 
 ### Name queues by purpose
 
@@ -292,7 +292,7 @@ Pass identifiers, not whole models or large arrays. The job loads fresh data whe
 
 ## Monitor what matters
 
-A queue can look healthy while silently failing. I watch three numbers: how many jobs are waiting, how long the oldest one has waited and how many failed in the last hour. Alerts fire on the age of the oldest job, because a growing wait is the earliest sign that workers are stuck or overloaded.
+A queue can look healthy while silently failing. We watch three numbers: how many jobs are waiting, how long the oldest one has waited and how many failed in the last hour. Alerts fire on the age of the oldest job, because a growing wait is the earliest sign that workers are stuck or overloaded.
 
 ### Failed jobs deserve a process
 
@@ -313,20 +313,20 @@ MD,
             ],
             [
                 'slug' => 'scoping-projects',
-                'title' => 'How I scope a project before writing any code',
+                'title' => 'How we scope a project before writing any code',
                 'category' => 'Process',
                 'hue' => 50,
                 'tags' => ['Process', 'Planning', 'Clients', 'Estimates'],
-                'excerpt' => 'The scoping process I use with clients: observe the real workflow, write the smallest useful release, list what is out of scope and agree on how success is measured.',
-                'seo_title' => 'How I Scope a Client Web Project Before Writing Any Code',
-                'seo_description' => 'The scoping process I use with clients: watch the real workflow, define the smallest useful release, list what is out of scope and agree how to measure success.',
+                'excerpt' => 'The scoping process we use with clients: observe the real workflow, write the smallest useful release, list what is out of scope and agree on how success is measured.',
+                'seo_title' => 'How We Scope a Client Web Project Before Writing Any Code',
+                'seo_description' => 'The scoping process we use with clients: watch real workflows, define the smallest useful release, list what is out of scope and agree how to measure success.',
                 'keywords' => ['project scoping', 'software estimates', 'client discovery', 'MVP planning'],
                 'body' => <<<'MD'
-The most expensive mistakes in a software project happen before anyone writes code. A vague goal turns into a long feature list, the list turns into an estimate, and the estimate turns into a promise that nobody can keep. Over the years I have settled on a scoping process that keeps projects small, honest and useful.
+The most expensive mistakes in a software project happen before anyone writes code. A vague goal turns into a long feature list, the list turns into an estimate, and the estimate turns into a promise that nobody can keep. Over the years we have settled on a scoping process that keeps projects small, honest and useful.
 
 ## Start by watching, not by asking
 
-Clients describe the process they think they have. Watching people work shows the process they actually have. I ask to sit with the people who will use the software for a few hours, and I write down every step, workaround and sticky note.
+Clients describe the process they think they have. Watching people work shows the process they actually have. We ask to sit with the people who will use the software for a few hours, and we write down every step, workaround and sticky note.
 
 ### Look for private spreadsheets
 
@@ -338,7 +338,7 @@ Phone calls, repeated questions and copy-paste between systems are measurable. C
 
 ## Define the smallest useful release
 
-The first release should solve one painful problem completely rather than many problems partially. I describe it in a single paragraph that a non-technical person can read and agree with. If the paragraph needs the word "and" more than twice, the release is too big.
+The first release should solve one painful problem completely rather than many problems partially. We describe it in a single paragraph that a non-technical person can read and agree with. If the paragraph needs the word "and" more than twice, the release is too big.
 
 - Who uses it, and in what situation.
 - The one job it does for them.
@@ -354,7 +354,7 @@ Before estimating, we agree on one or two numbers that should change: fewer miss
 
 ## Estimate in ranges, with assumptions
 
-I estimate the first release as a range and list the assumptions behind it, such as access to an existing system or a decision from a specific person by a certain date. When an assumption breaks, we both know why the estimate moves.
+We estimate the first release as a range and list the assumptions behind it, such as access to an existing system or a decision from a specific person by a certain date. When an assumption breaks, we both know why the estimate moves.
 
 ## Plan the first weeks in detail and the rest loosely
 
@@ -380,7 +380,7 @@ MD,
                 'seo_description' => 'Accessibility for data-heavy screens: color that never carries meaning alone, visible focus, keyboard-friendly tables and motion that respects settings.',
                 'keywords' => ['accessible dashboards', 'web accessibility', 'focus states', 'reduced motion'],
                 'body' => <<<'MD'
-Dashboards are dense by nature. They pack numbers, charts and controls into a single screen, and that density makes accessibility both harder and more important. People rely on dashboards to make decisions quickly, so anything that slows them down or hides information has a real cost. These are the practices I apply to every data-heavy interface I build.
+Dashboards are dense by nature. They pack numbers, charts and controls into a single screen, and that density makes accessibility both harder and more important. People rely on dashboards to make decisions quickly, so anything that slows them down or hides information has a real cost. These are the practices we apply to every data-heavy interface we build.
 
 ## Color should never carry meaning alone
 
@@ -388,7 +388,7 @@ Red and green status colors are the classic problem. Around one in twelve men ha
 
 ### Check contrast in both themes
 
-Text and important graphics need enough contrast against their background in light and dark themes. Muted grey text looks elegant in a design file and becomes unreadable on a laptop in sunlight. I check contrast for every text style and every chart color pair.
+Text and important graphics need enough contrast against their background in light and dark themes. Muted grey text looks elegant in a design file and becomes unreadable on a laptop in sunlight. We check contrast for every text style and every chart color pair.
 
 ### Use a limited, tested palette
 
@@ -420,7 +420,7 @@ Numbers that update constantly can be overwhelming. Group small changes, avoid f
 
 ## Test with real tools and real people
 
-Automated checkers catch missing labels and low contrast, but they cannot tell whether a workflow makes sense. I navigate every new screen with only a keyboard, try it with a screen reader, zoom to two hundred percent and switch on reduced motion. Whenever possible, I watch someone who relies on assistive technology use it.
+Automated checkers catch missing labels and low contrast, but they cannot tell whether a workflow makes sense. We navigate every new screen with only a keyboard, try it with a screen reader, zoom to two hundred percent and switch on reduced motion. Whenever possible, we watch someone who relies on assistive technology use it.
 
 ## Conclusion
 

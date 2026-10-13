@@ -299,9 +299,9 @@ it('fills empty starter copy on existing pages and keeps edited fields', functio
     $home = $resolver->forPath('/');
     $login = $resolver->forPath('/login');
 
-    expect($home['title'])->toBe('Mahfuz Ahmed: Full-Stack Developer for Next.js and Laravel')
+    expect($home['title'])->toBe('Next Template: Next.js and Laravel Web Studio for Teams')
         ->and(mb_strlen($home['description']))->toBeGreaterThanOrEqual(140)->toBeLessThanOrEqual(160)
-        ->and($home['keywords'])->toContain('full-stack developer')
+        ->and($home['keywords'])->toContain('web studio')
         ->and($login['title'])->toBe('Log in - Northwind')
         ->and($login['description'])->toContain('Sign in to your Northwind workspace')
         ->and($resolver->forPath('/register')['title'])->toBe('Create your account - Northwind');
@@ -349,9 +349,48 @@ it('upgrades home copy an older seeder wrote but keeps admin edits', function ()
 
     $home = SeoPage::query()->where('path', '/')->first();
 
-    expect($home->meta_title)->toBe('Mahfuz Ahmed: Full-Stack Developer for Next.js and Laravel')
+    expect($home->meta_title)->toBe('Next Template: Next.js and Laravel Web Studio for Teams')
         ->and($home->title_affix_mode)->toBe('none')
         ->and($home->meta_description)->toBe('A description the admin wrote for the home page by hand.');
+});
+
+it('replaces the personal copy and author an older seeder wrote', function (): void {
+    seoPage([
+        'path' => '/about',
+        'label' => 'About',
+        'page_type' => 'about',
+        'meta_title' => 'About Mahfuz Ahmed, Full-Stack Web Developer in Dhaka',
+        'meta_description' => 'Meet Mahfuz Ahmed, a full-stack developer with ten years of Next.js, React and Laravel experience who turns messy processes into simple, reliable web apps.',
+        'keywords' => ['about Mahfuz Ahmed', 'full-stack developer Dhaka', 'Next.js', 'Laravel', 'freelance web developer'],
+    ]);
+    seoPage([
+        'path' => '/contact',
+        'label' => 'Contact',
+        'page_type' => 'contact',
+        'meta_title' => 'Contact Mahfuz Ahmed to Discuss Your Next Web Project',
+        'keywords' => ['contact', 'reach the team'],
+    ]);
+    app(SeoSettings::class)->update(['default_author' => 'Mahfuz Ahmed']);
+
+    $this->seed(SeoPageSeeder::class);
+
+    $about = SeoPage::query()->where('path', '/about')->first();
+    $contact = SeoPage::query()->where('path', '/contact')->first();
+
+    expect($about->meta_title)->toBe('About Next Template, a Next.js and Laravel Web Studio')
+        ->and($about->meta_description)->toStartWith('Meet Next Template')
+        ->and($about->keywords)->toContain('about Next Template')
+        ->and($contact->meta_title)->toBe('Contact Next Template to Discuss Your Next Web Project')
+        ->and($contact->keywords)->toBe(['contact', 'reach the team'])
+        ->and(app(SeoSettings::class)->all()['default_author'])->toBe('Next Template');
+});
+
+it('keeps a default author the admin chose', function (): void {
+    app(SeoSettings::class)->update(['default_author' => 'Jane Editor']);
+
+    $this->seed(SeoPageSeeder::class);
+
+    expect(app(SeoSettings::class)->all()['default_author'])->toBe('Jane Editor');
 });
 
 it('keeps built-in pages from being removed or moved', function (): void {

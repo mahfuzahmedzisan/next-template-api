@@ -1,11 +1,13 @@
 <?php
 
+use App\Events\SeoInvalidated;
 use App\Models\Post;
 use App\Models\Project;
 use App\Services\Seo\SeoFileGenerator;
 use Database\Seeders\PostSeeder;
 use Database\Seeders\ProjectSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -67,6 +69,48 @@ it('keeps edited records when the seeders run again', function (): void {
         ->and(Post::query()->count())->toBe(6);
 });
 
+it('rewrites the demo records to the current copy and leaves admin records alone', function (): void {
+    $this->seed([ProjectSeeder::class, PostSeeder::class]);
+
+    $demo = Post::query()->where('slug', 'scoping-projects')->firstOrFail();
+    $publishedAt = $demo->published_at;
+    $demo->update(['title' => 'How I scope a project', 'author' => 'Mahfuz Ahmed', 'body' => 'I wrote this.']);
+    $demo->seo->update(['meta_title' => 'An old personal SEO title that an earlier seed wrote']);
+
+    $project = Project::query()->where('slug', 'ledgerly-finance-dashboard')->firstOrFail();
+    $project->update(['summary' => 'An old personal summary.']);
+
+    $own = Post::query()->create([
+        'slug' => 'admin-post',
+        'title' => 'Written by an admin',
+        'excerpt' => 'A post an admin wrote.',
+        'body' => 'I wrote this post myself.',
+        'author' => 'Jane Editor',
+        'published_at' => now(),
+    ]);
+    Event::fake([SeoInvalidated::class]);
+
+    $this->artisan('demo:refresh-content')->assertSuccessful();
+
+    $demo->refresh();
+
+    expect($demo->title)->toBe('How we scope a project before writing any code')
+        ->and($demo->author)->toBe('Next Template')
+        ->and($demo->body)->toContain('Over the years we have settled')
+        ->and($demo->published_at->equalTo($publishedAt))->toBeTrue()
+        ->and($demo->seo->meta_title)->toBe('How We Scope a Client Web Project Before Writing Any Code')
+        ->and($project->fresh()->summary)->not->toBe('An old personal summary.')
+        ->and($own->fresh()->only(['title', 'body', 'author']))->toBe([
+            'title' => 'Written by an admin',
+            'body' => 'I wrote this post myself.',
+            'author' => 'Jane Editor',
+        ])
+        ->and(Post::query()->count())->toBe(7)
+        ->and(Project::query()->count())->toBe(6);
+
+    Event::assertDispatched(SeoInvalidated::class);
+});
+
 it('serves published projects and posts with their resolved SEO', function (): void {
     $this->seed([ProjectSeeder::class, PostSeeder::class]);
     Post::query()->where('slug', 'scoping-projects')->update(['published_at' => now()->addDay()]);
@@ -88,7 +132,7 @@ it('serves published projects and posts with their resolved SEO', function (): v
     $this->getJson('/api/v1/posts/nextjs-seo-checklist')
         ->assertOk()
         ->assertJsonPath('data.post.seo.schema.json_ld.@type', 'Article')
-        ->assertJsonPath('data.post.seo.schema.json_ld.author.name', 'Mahfuz Ahmed');
+        ->assertJsonPath('data.post.seo.schema.json_ld.author.name', 'Next Template');
 
     $this->getJson('/api/v1/posts/scoping-projects')->assertNotFound();
     $this->getJson('/api/v1/projects/missing-project')->assertNotFound();

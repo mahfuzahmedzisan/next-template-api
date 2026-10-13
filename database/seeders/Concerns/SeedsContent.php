@@ -9,10 +9,24 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Shared helpers for the demo content seeders. Like SeoPageSeeder they only
- * fill what is still empty, so edited records are never overwritten.
+ * fill what is still empty, so edited records are never overwritten, unless
+ * overwrite mode is switched on (demo:refresh-content) to rewrite the demo
+ * records to the current copy.
  */
 trait SeedsContent
 {
+    /** Fields that keep their stored value even in overwrite mode. */
+    private const KEPT_ON_OVERWRITE = ['published_at'];
+
+    private bool $overwrite = false;
+
+    public function overwriting(bool $overwrite = true): static
+    {
+        $this->overwrite = $overwrite;
+
+        return $this;
+    }
+
     /**
      * A 1200x628 abstract cover (no text, so no font is needed), written once.
      */
@@ -60,7 +74,9 @@ trait SeedsContent
     protected function fillBlank(Model $model, array $values): void
     {
         foreach ($values as $field => $value) {
-            if (blank($model->getAttribute($field))) {
+            $replace = $this->overwrite && ! in_array($field, self::KEPT_ON_OVERWRITE, true);
+
+            if ($replace || blank($model->getAttribute($field))) {
                 $model->setAttribute($field, $value);
             }
         }
@@ -75,7 +91,7 @@ trait SeedsContent
     {
         /** @var Model $meta */
         $meta = $model->seo()->firstOrNew();
-        $seeded = blank($meta->getAttribute('meta_title'));
+        $seeded = $this->overwrite || blank($meta->getAttribute('meta_title'));
         $this->fillBlank($meta, $seo);
 
         if ($seeded) {

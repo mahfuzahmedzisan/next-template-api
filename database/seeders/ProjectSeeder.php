@@ -64,9 +64,9 @@ class ProjectSeeder extends Seeder
         return <<<MD
 ## Working together
 
-The {$data['client']} project ran in short weekly cycles. Every Friday I shared a working build, a short written update and a list of open questions, so decisions never had to wait for the next meeting. Stakeholders could try each change on a preview link the same day, which kept feedback concrete and kept surprises out of the launch week.
+The {$data['client']} project ran in short weekly cycles. Every Friday we shared a working build, a short written update and a list of open questions, so decisions never had to wait for the next meeting. Stakeholders could try each change on a preview link the same day, which kept feedback concrete and kept surprises out of the launch week.
 
-The stack, {$stack}, was chosen for the team's existing skills and for long-term maintenance rather than novelty. After the {$data['year']} launch I stayed on for a support period to fix issues, write documentation and hand the system over to the in-house team with a runbook that covers deploys, backups, monitoring and the most common support requests.
+The stack, {$stack}, was chosen for the team's existing skills and for long-term maintenance rather than novelty. After the {$data['year']} launch we stayed on for a support period to fix issues, write documentation and hand the system over to the in-house team with a runbook that covers deploys, backups, monitoring and the most common support requests.
 MD;
     }
 
@@ -105,7 +105,7 @@ MD;
                 'live_url' => 'https://ledgerly.example.com',
                 'summary' => 'A cash-flow dashboard that gives small agencies one honest view of invoices, payroll and runway, replacing three spreadsheets and a weekly reconciliation meeting.',
                 'seo_title' => 'Ledgerly Finance Dashboard Case Study for Small Agencies',
-                'seo_description' => 'How I designed Ledgerly, a cash-flow dashboard that replaced three spreadsheets and cut weekly reconciliation for small agencies from hours to minutes.',
+                'seo_description' => 'How we designed Ledgerly, a cash-flow dashboard that replaced three spreadsheets and cut weekly reconciliation for small agencies from hours to minutes.',
                 'keywords' => ['finance dashboard', 'Next.js case study', 'Laravel SaaS', 'cash flow'],
                 'body' => <<<'MD'
 ## The challenge
@@ -118,7 +118,7 @@ The brief was simple to say and hard to deliver: one screen that shows cash in, 
 
 ### Discovery
 
-I spent the first two weeks with four agency owners, watching them prepare the Monday numbers. Every one of them kept a private column of adjustments. Those adjustments became the most important feature: a place to record expected payments and known costs that the accounting tool does not know about yet.
+We spent the first two weeks with four agency owners, watching them prepare the Monday numbers. Every one of them kept a private column of adjustments. Those adjustments became the most important feature: a place to record expected payments and known costs that the accounting tool does not know about yet.
 
 ### Design
 
@@ -134,9 +134,9 @@ The Next.js front end talks to a Laravel API through a small backend-for-fronten
 - Owners now check the runway figure several times a week instead of once a month.
 - The adjustments feature is used by every paying workspace.
 
-## What I would do differently
+## What we would do differently
 
-I would ship the adjustments feature first. It was the reason people switched, and building it earlier would have shortened the feedback loop by several weeks. I would also invest sooner in import monitoring, because the first support tickets were all about providers that changed their export format without notice.
+We would ship the adjustments feature first. It was the reason people switched, and building it earlier would have shortened the feedback loop by several weeks. We would also invest sooner in import monitoring, because the first support tickets were all about providers that changed their export format without notice.
 MD,
             ],
             [
@@ -164,7 +164,7 @@ The clinic wanted patients to book, move and cancel appointments themselves, pay
 
 ### Discovery
 
-I sat at the front desk for two mornings and logged every call. Most were simple: book, move or confirm. That list became the scope for the first release, and anything outside it stayed a phone call on purpose.
+We sat at the front desk for two mornings and logged every call. Most were simple: book, move or confirm. That list became the scope for the first release, and anything outside it stayed a phone call on purpose.
 
 ### Design
 
@@ -180,7 +180,7 @@ Laravel handles availability rules, holds a slot for ten minutes while a patient
 - Around seventy percent of bookings now happen online, mostly in the evening.
 - The front desk handles far fewer calls and more patients in person.
 
-## What I learned
+## What we learned
 
 Reminders matter more than any other feature, but only when they are easy to act on. Adding a one-tap link to move an appointment did more for no-shows than sending more messages. Small details, such as showing the therapist's photo, also made patients noticeably more confident about booking online.
 MD,
@@ -210,7 +210,7 @@ The goal was an app that works fully offline, captures photos against the right 
 
 ### Discovery
 
-I joined two surveyors on site visits. The pattern was clear: they work through a building floor by floor, take many photos quickly, and only look at the report at the end of the day. The app needed to follow that rhythm instead of forcing a form-first workflow.
+We joined two surveyors on site visits. The pattern was clear: they work through a building floor by floor, take many photos quickly, and only look at the report at the end of the day. The app needed to follow that rhythm instead of forcing a form-first workflow.
 
 ### Design
 
@@ -226,9 +226,9 @@ The app is a progressive web app built with Next.js. Every change is written to 
 - Paper notes have disappeared from site visits entirely.
 - Misfiled photos dropped to almost zero thanks to item-level capture.
 
-## What I learned
+## What we learned
 
-Offline-first is mostly about trust. The status badge, a clear log of what synced and when, and a manual retry button did more for adoption than any performance work. I also learned to test on cheap tablets early, because storage limits and battery savers behave very differently from a developer phone.
+Offline-first is mostly about trust. The status badge, a clear log of what synced and when, and a manual retry button did more for adoption than any performance work. We also learned to test on cheap tablets early, because storage limits and battery savers behave very differently from a developer phone.
 MD,
             ],
             [
@@ -256,7 +256,7 @@ The team wanted a faster storefront without migrating their order management, wa
 
 ### Discovery
 
-Analytics showed that most revenue came from shoppers who searched first. I audited the top two hundred search terms and found that about a fifth returned no results at all. That made search the clear priority after raw speed.
+Analytics showed that most revenue came from shoppers who searched first. We audited the top two hundred search terms and found that about a fifth returned no results at all. That made search the clear priority after raw speed.
 
 ### Design
 
@@ -272,7 +272,7 @@ Product and category pages are statically generated with Next.js and revalidated
 - Searches with no results dropped from about twenty percent to under three.
 - Search became the highest-converting entry point on the site.
 
-## What I learned
+## What we learned
 
 Speed work paid off most where it touched the first visit. Image sizing and removing third-party scripts did more than any clever caching. On search, giving the merchandising team a simple synonyms screen mattered more than tuning ranking rules, because they understand how customers describe products.
 MD,
@@ -302,7 +302,7 @@ The company wanted a live screen for the dispatch room that shows which deliveri
 
 ### Discovery
 
-I spent a shift in the dispatch room. Dispatchers did not want more data; they wanted fewer surprises. Anything that needed action within thirty minutes mattered, and everything else was noise.
+We spent a shift in the dispatch room. Dispatchers did not want more data; they wanted fewer surprises. Anything that needed action within thirty minutes mattered, and everything else was noise.
 
 ### Design
 
@@ -318,7 +318,7 @@ Driver locations and stop events stream into Laravel, which recalculates estimat
 - Complaint calls about late deliveries fell noticeably within two months.
 - Managers use the history to plan routes around known slow periods.
 
-## What I learned
+## What we learned
 
 Real-time interfaces need restraint. The first version updated too often and felt restless, so we added gentle transitions and grouped small changes. Explaining the reason for each risk turned the screen from a scoreboard into a tool that dispatchers trust and act on.
 MD,
@@ -365,9 +365,9 @@ Laravel powers enrolment, progress tracking and certificate generation, while Ne
 - Navigation questions to staff dropped by more than half.
 - Coordinators enrol whole cohorts in minutes instead of an afternoon.
 
-## What I learned
+## What we learned
 
-The continue card was the most valuable thing we built, and also the simplest. Designing for short mobile sessions forced us to remove steps everywhere else too. I also learned to involve coordinators early, because their workflows shaped the data model more than the learner features did.
+The continue card was the most valuable thing we built, and also the simplest. Designing for short mobile sessions forced us to remove steps everywhere else too. We also learned to involve coordinators early, because their workflows shaped the data model more than the learner features did.
 MD,
             ],
         ];
