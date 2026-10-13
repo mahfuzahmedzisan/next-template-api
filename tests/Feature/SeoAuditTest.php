@@ -33,7 +33,7 @@ it('scores a healthy production page at 100 and ranks real issues', function ():
             '<meta name="description"' => '<meta name="summary"',
             '<h1>Team Northwind</h1>' => '<h1>Team Northwind</h1><h1>Two</h1>',
         ]),
-    ], ['Content-Encoding' => 'gzip', 'Strict-Transport-Security' => 'max-age=31536000']);
+    ], GOLDEN_HEADERS);
 
     $audit = runAudit();
     $pages = $audit->pages()->get()->keyBy('url');

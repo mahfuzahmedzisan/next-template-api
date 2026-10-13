@@ -4,6 +4,7 @@ use App\Services\Seo\Audit\RobotsRules;
 use App\Services\Seo\Audit\SeoCheckCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -57,7 +58,7 @@ function goldenFailure(string $key): array
         'viewport' => ['html' => ['<meta name="viewport" content="width=device-width, initial-scale=1">' => '']],
         'charset' => [
             'html' => ['<meta charset="utf-8">' => ''],
-            'headers' => ['Content-Type' => 'text/html', 'Content-Encoding' => 'gzip', 'Strict-Transport-Security' => 'max-age=31536000'],
+            'headers' => ['Content-Type' => 'text/html', ...GOLDEN_HEADERS],
         ],
         'structured_data' => ['html' => ['"@context":"https://schema.org"' => '"@context":"https://example.org"']],
         'breadcrumbs' => ['html' => ['"@type":"BreadcrumbList"' => '"@type":"ItemList"']],
@@ -76,8 +77,12 @@ function goldenFailure(string $key): array
         'status_ok' => ['overrides' => ['/about' => Http::response('', 500)]],
         'robots_txt_allows' => ['overrides' => $robots("User-agent: *\nDisallow: /about")],
         'https' => ['origin' => 'http://northwind.example'],
-        'hsts' => ['headers' => ['Content-Encoding' => 'gzip']],
-        'compression' => ['headers' => ['Strict-Transport-Security' => 'max-age=31536000']],
+        'hsts' => ['headers' => Arr::except(GOLDEN_HEADERS, 'Strict-Transport-Security')],
+        'security_headers' => ['headers' => [
+            ...Arr::except(GOLDEN_HEADERS, 'X-Frame-Options'),
+            'Content-Security-Policy-Report-Only' => "frame-ancestors 'none'",
+        ]],
+        'compression' => ['headers' => Arr::except(GOLDEN_HEADERS, 'Content-Encoding')],
         'ttfb' => ['config' => ['seo.audit.ttfb_ms' => -1]],
         'html_size' => ['config' => ['seo.audit.max_html_kb' => 0]],
 
@@ -145,6 +150,15 @@ it('reports every robots.txt syntax problem and groups rules per RFC 9309', func
         ->toContain('unknown directive "noindex"')
         ->toContain('not a valid user-agent token')
         ->toContain('must start with / or *');
+});
+
+it('accepts an enforced CSP frame-ancestors in place of X-Frame-Options', function (): void {
+    $audit = goldenAudit(['headers' => [
+        ...Arr::except(GOLDEN_HEADERS, 'X-Frame-Options'),
+        'Content-Security-Policy' => "default-src 'self'; frame-ancestors 'none'",
+    ]]);
+
+    expect(checkResults($audit, 'security_headers')->pluck('passed')->unique()->all())->toBe([true]);
 });
 
 it('fails each check on its golden failure case', function (string $key): void {

@@ -12,6 +12,15 @@ use Illuminate\Support\Facades\Http;
 
 const GOLDEN_ORIGIN = 'https://northwind.example';
 
+/** Response headers of the healthy golden site. */
+const GOLDEN_HEADERS = [
+    'Content-Encoding' => 'gzip',
+    'Strict-Transport-Security' => 'max-age=31536000',
+    'X-Content-Type-Options' => 'nosniff',
+    'X-Frame-Options' => 'DENY',
+    'Referrer-Policy' => 'strict-origin-when-cross-origin',
+];
+
 function auditPage(string $path, array $attributes = []): SeoPage
 {
     return SeoPage::withoutEvents(fn () => SeoPage::query()->create([
@@ -238,7 +247,7 @@ function goldenAudit(array $case = []): SeoAudit
     fakeSite(
         $origin,
         ['/' => healthyHtml($origin, '/', $replace), '/about' => healthyHtml($origin, '/about', $replace), ...$extra],
-        $case['headers'] ?? ['Content-Encoding' => 'gzip', 'Strict-Transport-Security' => 'max-age=31536000'],
+        $case['headers'] ?? GOLDEN_HEADERS,
         $case['og'] ?? null,
         $case['sitemap'] ?? ['/about', ...array_keys($extra)],
         $case['overrides'] ?? [],

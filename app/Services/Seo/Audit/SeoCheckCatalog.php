@@ -77,6 +77,7 @@ final class SeoCheckCatalog
         'robots_txt_allows' => ['label' => 'robots.txt allows the page', 'category' => 'configuration', 'weight' => 5, 'priority' => 'high', 'fix_minutes' => 5],
         'https' => ['label' => 'Served over HTTPS', 'category' => 'configuration', 'weight' => 3, 'priority' => 'high', 'fix_minutes' => 30, 'environment' => true],
         'hsts' => ['label' => 'HSTS header', 'category' => 'configuration', 'weight' => 1, 'priority' => 'low', 'fix_minutes' => 10, 'environment' => true],
+        'security_headers' => ['label' => 'Security headers (nosniff, framing, referrer)', 'category' => 'configuration', 'weight' => 1, 'priority' => 'low', 'fix_minutes' => 15, 'environment' => true],
         'compression' => ['label' => 'Compressed response', 'category' => 'configuration', 'weight' => 2, 'priority' => 'medium', 'fix_minutes' => 10, 'environment' => true],
 
         'ttfb' => ['label' => 'Fast server response', 'category' => 'performance', 'weight' => 3, 'priority' => 'medium', 'fix_minutes' => 60],

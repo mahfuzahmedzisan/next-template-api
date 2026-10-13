@@ -4,6 +4,7 @@ use App\Http\Middleware\CaptureAuditContext;
 use App\Http\Middleware\EnsureTrustedBff;
 use App\Http\Middleware\EnsureTusHook;
 use App\Http\Middleware\EnsureUserHasRole;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -27,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'bff' => EnsureTrustedBff::class,
             'tus.hook' => EnsureTusHook::class,
         ]);
+
+        $middleware->append(SecurityHeaders::class);
 
         // Every /api/v1 route. Not applied to /up (Coolify healthcheck).
         $middleware->appendToGroup('api', EnsureTrustedBff::class);

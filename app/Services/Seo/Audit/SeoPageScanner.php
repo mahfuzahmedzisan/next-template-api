@@ -174,6 +174,7 @@ final class SeoPageScanner
             'robots_txt_allows' => $this->robotsTxt($page, $robots),
             'https' => $this->https($page),
             'hsts' => $this->hsts($page),
+            'security_headers' => $this->securityHeaders($page),
             'compression' => $this->compression($page),
             'ttfb' => $this->ttfbCheck($page),
             'html_size' => $this->htmlSize($page),
@@ -858,6 +859,24 @@ final class SeoPageScanner
         return $header !== ''
             ? $this->result(true, $header, 'Strict-Transport-Security', 'Present.')
             : $this->result(false, 'missing', 'Strict-Transport-Security', 'Send an HSTS header from the web server.');
+    }
+
+    private function securityHeaders(ScannedPage $page): array
+    {
+        // An enforced CSP counts for framing; a Report-Only one does not block anything.
+        $framing = $page->header('x-frame-options') !== ''
+            || str_contains(strtolower($page->header('content-security-policy')), 'frame-ancestors');
+
+        $missing = array_keys(array_filter([
+            'X-Content-Type-Options' => strtolower($page->header('x-content-type-options')) !== 'nosniff',
+            'X-Frame-Options or CSP frame-ancestors' => ! $framing,
+            'Referrer-Policy' => $page->header('referrer-policy') === '',
+        ]));
+        $expected = 'nosniff, framing protection, Referrer-Policy';
+
+        return $missing === []
+            ? $this->result(true, 'present', $expected, 'Present.')
+            : $this->result(false, 'missing: '.implode(', ', $missing), $expected, 'Send these headers from the app or web server to block MIME sniffing and clickjacking and to limit referrer leaks.');
     }
 
     private function compression(ScannedPage $page): array
