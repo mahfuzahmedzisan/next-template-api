@@ -26,6 +26,23 @@ final class ScannedPage
         public readonly int $ttfbMs,
     ) {
         $this->crawler = new Crawler($html, $url);
+        $this->stripHiddenContent();
+    }
+
+    /**
+     * Elements carrying the `hidden` attribute are invisible to anyone who
+     * does not run JavaScript - real crawlers included. Next.js's streaming
+     * SSR ships the real content this way, inert, until a client-side swap
+     * script replaces a visible loading fallback with it. Removing hidden
+     * nodes before any check runs makes every check see the page the way a
+     * non-JS visitor actually does, instead of reading content a crawler
+     * would never see.
+     */
+    private function stripHiddenContent(): void
+    {
+        foreach (iterator_to_array($this->crawler->filter('[hidden]')) as $node) {
+            $node->parentNode?->removeChild($node);
+        }
     }
 
     public function header(string $name): string

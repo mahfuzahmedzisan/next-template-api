@@ -93,3 +93,23 @@ it('leaves the Next.js RSC payload out of the text-to-code ratio but reports the
     expect($row['passed'])->toBeTrue()
         ->and($row['actual'])->toMatch('/^[\d.]+% \([\d.]+% with Next\.js data\)$/');
 });
+
+it('fails real checks when the body content sits behind a client-side streaming swap', function (): void {
+    // Reproduces Next.js's streaming SSR shape for a page with a root
+    // `loading.tsx`: the visible shell only has a 2-word loading fallback,
+    // and every real heading/paragraph/link is inert inside `hidden`, only
+    // reachable once a client script moves it into place.
+    $audit = goldenAudit(['html' => [
+        '<body>' => '<body><div class="route-fallback" role="status"><span class="sr-only">Loading page</span></div><div hidden id="S:0">',
+        '</body>' => '</div><script>$RC("B:0","S:0")</script></body>',
+    ]]);
+
+    expect(checkResults($audit, 'h1_single')->firstWhere('passed', false)['actual'] ?? null)->toBe('no H1')
+        ->and(checkResults($audit, 'content_length')->every(fn (array $row) => ! $row['passed']))->toBeTrue()
+        ->and(checkResults($audit, 'internal_links')->every(fn (array $row) => ! $row['passed']))->toBeTrue()
+        ->and(checkResults($audit, 'text_ratio')->every(fn (array $row) => ! $row['passed']))->toBeTrue();
+
+    // <head> metadata is resolved before streaming starts, so it is
+    // unaffected - matching what real non-JS checkers report in practice.
+    expect(checkResults($audit, 'title_present')->every(fn (array $row) => $row['passed']))->toBeTrue();
+});
