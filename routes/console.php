@@ -31,9 +31,11 @@ Schedule::call(function (): void {
 Schedule::call(function (): void {
     $hours = max(1, (int) config('media-hls.abandon_after_hours'));
 
+    // lazyById pages by key, so deleting rows mid-loop never skips the next page.
     MediaItem::query()
         ->where('status', VideoStatus::AwaitingUpload)
         ->where('created_at', '<', now()->subHours($hours))
+        ->lazyById(100)
         ->each(fn (MediaItem $item) => $item->delete());
 })->hourly()->name('prune-abandoned-media-uploads')->withoutOverlapping();
 

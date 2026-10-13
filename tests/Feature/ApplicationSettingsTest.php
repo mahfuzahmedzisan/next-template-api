@@ -120,6 +120,24 @@ it('stores a brand file on the public disk', function (): void {
     );
 });
 
+it('strips script from an svg brand file before it is served', function (): void {
+    Storage::fake('public');
+    $admin = User::factory()->admin()->create();
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><circle r="4" onload="alert(2)"/></svg>';
+
+    actingAsSanctum($admin)->post('/api/v1/admin/settings/logo', [
+        'file' => UploadedFile::fake()->createWithContent('logo.svg', $svg),
+    ])->assertOk();
+
+    $stored = collect(Storage::disk('public')->allFiles('settings'))->first();
+    $contents = strtolower((string) Storage::disk('public')->get($stored));
+
+    expect($stored)->toEndWith('.svg')
+        ->and($contents)->toContain('circle')
+        ->not->toContain('<script')
+        ->not->toContain('onload');
+});
+
 it('stores an IANA timezone and treats auto as no preference', function (): void {
     $user = User::factory()->create();
 

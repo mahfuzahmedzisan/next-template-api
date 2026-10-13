@@ -78,13 +78,22 @@ final class HlsTranscodeService
     {
         $fresh = $item->fresh() ?? $item;
 
-        broadcast(new VideoProcessingUpdated(
-            userId: (int) $fresh->uploaded_by,
-            videoId: $fresh->id,
-            status: $fresh->status->value,
-            progress: (int) $fresh->progress,
-            streamUrl: $fresh->streamUrl(),
-            errorMessage: $fresh->error_message,
-        ));
+        if ($fresh->uploaded_by === null) {
+            return;
+        }
+
+        // Progress pushes are best effort; a Reverb outage must not fail a two-hour transcode.
+        try {
+            broadcast(new VideoProcessingUpdated(
+                userId: (int) $fresh->uploaded_by,
+                videoId: $fresh->id,
+                status: $fresh->status->value,
+                progress: (int) $fresh->progress,
+                streamUrl: $fresh->streamUrl(),
+                errorMessage: $fresh->error_message,
+            ));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 }

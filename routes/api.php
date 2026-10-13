@@ -48,15 +48,18 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('broadcasting/auth', [BroadcastAuthController::class, 'authenticate']);
+});
 
+// Diagnostics for the admin Realtime screen; each call broadcasts an event.
+Route::middleware(['auth:sanctum', 'role:admin', 'throttle:30,1'])->group(function (): void {
     Route::get('realtime/ping', [RealtimeController::class, 'ping']);
     Route::get('realtime/health', [RealtimeController::class, 'health']);
     Route::post('realtime/test-notification', [RealtimeController::class, 'testNotification']);
 });
 
 Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
-    Route::put('/', [ProfileController::class, 'update']);
-    Route::put('password', [ProfileController::class, 'updatePassword']);
+    Route::put('/', [ProfileController::class, 'update'])->middleware('throttle:sensitive');
+    Route::put('password', [ProfileController::class, 'updatePassword'])->middleware('throttle:sensitive');
     Route::put('preferences', [ProfileController::class, 'updatePreferences']);
     Route::post('avatar', [ProfileController::class, 'updateAvatar']);
     Route::delete('avatar', [ProfileController::class, 'destroyAvatar']);
@@ -78,10 +81,13 @@ Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
 
     Route::prefix('two-factor-authentication')->group(function (): void {
         Route::get('/', [TwoFactorAuthenticationController::class, 'show']);
-        Route::post('/', [TwoFactorAuthenticationController::class, 'enable']);
-        Route::post('confirm', [TwoFactorAuthenticationController::class, 'confirm']);
-        Route::delete('/', [TwoFactorAuthenticationController::class, 'disable']);
-        Route::post('recovery-codes', [TwoFactorAuthenticationController::class, 'recoveryCodes']);
+
+        Route::middleware('throttle:sensitive')->group(function (): void {
+            Route::post('/', [TwoFactorAuthenticationController::class, 'enable']);
+            Route::post('confirm', [TwoFactorAuthenticationController::class, 'confirm']);
+            Route::delete('/', [TwoFactorAuthenticationController::class, 'disable']);
+            Route::post('recovery-codes', [TwoFactorAuthenticationController::class, 'recoveryCodes']);
+        });
     });
 });
 

@@ -373,3 +373,26 @@ it('finds media by keyword', function (): void {
         ->assertJsonPath('data.meta.total', 1)
         ->assertJsonPath('data.media.0.slug', 'studio-take');
 });
+
+it('keeps media when the admin who uploaded it is deleted', function (): void {
+    $uploader = User::factory()->admin()->create();
+    $item = MediaItem::factory()->create(['uploaded_by' => $uploader->id]);
+
+    $uploader->delete();
+
+    expect($item->fresh())->not->toBeNull()
+        ->and($item->fresh()->uploaded_by)->toBeNull();
+});
+
+it('refuses to retry a conversion that is still making progress', function (): void {
+    Bus::fake();
+    $admin = User::factory()->admin()->create();
+    $item = MediaItem::factory()->create([
+        'kind' => MediaKind::Video,
+        'status' => VideoStatus::Processing,
+    ]);
+
+    actingAsSanctum($admin)->postJson("/api/v1/admin/media/{$item->id}/retry")->assertUnprocessable();
+
+    Bus::assertNotDispatched(GenerateHlsJob::class);
+});

@@ -6,6 +6,7 @@ use App\Contracts\EncodesHls;
 use App\Mail\ApplicationMailManager;
 use App\Services\ApplicationSettings;
 use App\Services\FfmpegHlsEncoder;
+use App\Support\ClientContext;
 use App\Support\FrontendOrigins;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -58,20 +59,25 @@ class AppServiceProvider extends ServiceProvider
      */
     private function configureRateLimiting(): void
     {
+        // Requests come from the BFF, so $request->ip() would be one shared IP.
         RateLimiter::for('register', function (Request $request) {
-            return Limit::perMinute(3)->by($request->ip());
+            return Limit::perMinute(3)->by((string) ClientContext::ip($request));
         });
 
         RateLimiter::for('forgot-password', function (Request $request) {
-            return Limit::perMinute(3)->by($request->ip().'|'.$request->input('email'));
+            return Limit::perMinute(3)->by(ClientContext::ip($request).'|'.$request->input('email'));
         });
 
         RateLimiter::for('reset-password', function (Request $request) {
-            return Limit::perMinute(5)->by($request->ip());
+            return Limit::perMinute(5)->by((string) ClientContext::ip($request));
         });
 
         RateLimiter::for('admin-users', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            return Limit::perMinute(60)->by($request->user()?->id ?: (string) ClientContext::ip($request));
+        });
+
+        RateLimiter::for('sensitive', function (Request $request) {
+            return Limit::perMinute(6)->by($request->user()?->id ?: (string) ClientContext::ip($request));
         });
     }
 

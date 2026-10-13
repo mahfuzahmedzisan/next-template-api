@@ -15,6 +15,8 @@ use Spatie\Activitylog\Support\Config;
 #[Description('Delete audit log entries older than the retention period')]
 class PruneAuditLogCommand extends Command
 {
+    private const BATCH_SIZE = 5000;
+
     public function handle(ApplicationSettings $settings): int
     {
         $override = $this->option('days');
@@ -31,7 +33,7 @@ class PruneAuditLogCommand extends Command
 
         AuditContext::markSystem();
 
-        $deleted = Config::cleanActivityLogAction()->execute($days);
+        $deleted = $this->pruneInBatches($days);
 
         if ($deleted > 0) {
             Audit::log(AuditEvent::AuditPruned, properties: [
@@ -43,5 +45,30 @@ class PruneAuditLogCommand extends Command
         $this->components->info("Deleted {$deleted} audit entries older than {$days} days.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * One DELETE over months of rows holds a long table lock that blocks
+     * every request writing an audit entry, so delete a slice at a time.
+     */
+    private function pruneInBatches(int $days): int
+    {
+        $model = Config::activityModelInstance();
+        $cutOff = now()->subDays($days);
+        $deleted = 0;
+
+        do {
+            $ids = $model::query()
+                ->where('created_at', '<', $cutOff)
+                ->orderBy('id')
+                ->limit(self::BATCH_SIZE)
+                ->pluck('id');
+
+            if ($ids->isNotEmpty()) {
+                $deleted += $model::query()->whereKey($ids->all())->delete();
+            }
+        } while ($ids->count() === self::BATCH_SIZE);
+
+        return $deleted;
     }
 }

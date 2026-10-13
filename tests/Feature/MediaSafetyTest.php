@@ -2,9 +2,15 @@
 
 use App\Enums\MediaKind;
 use App\Enums\VideoStatus;
+use App\Jobs\AdoptFinishedUpload;
 use App\Models\MediaItem;
 use App\Models\User;
+use App\Support\AllowedMedia;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\NullEngine;
 
@@ -151,4 +157,73 @@ it('rejects a file whose magic bytes do not match the extension', function (): v
 
     expect($result['response']->status())->toBe(422);
     expect(MediaItem::query()->findOrFail($result['id'])->getFirstMedia('source'))->toBeNull();
+});
+
+it('lists media with a flat number of queries', function (): void {
+    Storage::fake('public');
+    $admin = User::factory()->admin()->create();
+
+    $seed = function (int $count): void {
+        foreach (range(1, $count) as $index) {
+            $item = MediaItem::factory()->create([
+                'kind' => MediaKind::Image,
+                'extension' => 'png',
+                'status' => VideoStatus::Ready,
+            ]);
+            $source = tempnam(sys_get_temp_dir(), 'img');
+            file_put_contents($source, 'bytes-'.$index);
+            $item->addMedia($source)->usingFileName("image-{$index}.png")->toMediaCollection('source');
+        }
+    };
+
+    $count = function () use ($admin): int {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        actingAsSanctum($admin)->getJson('/api/v1/admin/media?per_page=50')->assertOk();
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $queries;
+    };
+
+    $seed(1);
+    $one = $count();
+    $seed(10);
+    $eleven = $count();
+
+    expect($eleven)->toBe($one);
+});
+
+it('queues adoption instead of importing an unfinished upload during a read', function (): void {
+    Bus::fake([AdoptFinishedUpload::class]);
+    $admin = User::factory()->admin()->create();
+    $item = MediaItem::factory()->create(['status' => VideoStatus::AwaitingUpload]);
+
+    actingAsSanctum($admin)->getJson('/api/v1/admin/media')->assertOk();
+    actingAsSanctum($admin)->getJson("/api/v1/admin/media/{$item->id}")->assertOk();
+
+    Bus::assertDispatched(AdoptFinishedUpload::class, fn (AdoptFinishedUpload $job): bool => $job->mediaId === $item->id);
+});
+
+it('caps image uploads well below the video limit', function (): void {
+    config([
+        'media-hls.max_bytes' => 8 * 1024 * 1024 * 1024,
+        'media-hls.max_bytes_by_kind.image' => 50 * 1024 * 1024,
+    ]);
+
+    expect(AllowedMedia::rejectionReason('photo.png', 'image/png', 60 * 1024 * 1024))
+        ->toBe('This file is larger than the upload limit.')
+        ->and(AllowedMedia::rejectionReason('clip.mp4', 'video/mp4', 60 * 1024 * 1024))
+        ->toBeNull();
+});
+
+it('answers a duplicate slug race with 422 instead of a server error', function (): void {
+    $admin = User::factory()->admin()->create();
+    MediaItem::factory()->create(['slug' => 'taken-slug']);
+
+    Route::middleware('api')->post('/api/v1/__test/unique', function () {
+        MediaItem::factory()->create(['slug' => 'taken-slug']);
+    });
+
+    actingAsSanctum($admin)->postJson('/api/v1/__test/unique')->assertUnprocessable();
 });

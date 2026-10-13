@@ -8,8 +8,10 @@ use App\Models\MediaItem;
 use App\Services\MediaUploadTokenService;
 use App\Services\StoreFinishedUpload;
 use App\Support\AllowedMedia;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class TusHookController extends Controller
 {
@@ -85,15 +87,30 @@ class TusHookController extends Controller
             return $this->reject(403, 'Upload token is invalid.');
         }
 
-        $path = $upload['Storage']['Path'] ?? null;
+        // tusd fires pre-finish and post-finish, and the adoption job can run too.
+        // The shared lock means only one of them imports the file.
+        try {
+            $reason = Cache::lock('media-finish-'.$item->id, 180)->block(90, function () use ($item, $upload, $uploads): ?string {
+                $item->refresh();
 
-        if (! is_string($path) || ! is_file($path)) {
-            return $this->reject(422, 'Finished upload file is missing.');
+                if ($item->status !== VideoStatus::AwaitingUpload) {
+                    return null;
+                }
+
+                $path = $upload['Storage']['Path'] ?? null;
+
+                if (! is_string($path) || ! is_file($path)) {
+                    return 'Finished upload file is missing.';
+                }
+
+                $filename = (string) ($upload['MetaData']['filename'] ?? 'file.bin');
+                $tusId = (string) ($upload['ID'] ?? $item->tus_id);
+
+                return $uploads->store($item, $path, $filename, $tusId);
+            });
+        } catch (LockTimeoutException) {
+            return $this->reject(409, 'This upload is already being processed.');
         }
-
-        $filename = (string) ($upload['MetaData']['filename'] ?? 'file.bin');
-        $tusId = (string) ($upload['ID'] ?? $item->tus_id);
-        $reason = $uploads->store($item, $path, $filename, $tusId);
 
         if ($reason !== null) {
             return $this->reject(422, $reason);

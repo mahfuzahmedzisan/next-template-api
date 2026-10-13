@@ -6,6 +6,7 @@ use App\Contracts\Seo\Seoable;
 use App\Jobs\Seo\NotifyFrontendRevalidate;
 use App\Models\SeoPage;
 use App\Support\Seo\SeoUrl;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -37,6 +38,16 @@ final class SeoFileGenerator
      * @return array<string, array<string, mixed>>
      */
     public function generate(string $file = 'all'): array
+    {
+        // The nightly job, an admin "Regenerate" and a first public read can overlap;
+        // one writer at a time keeps a half-written sitemap from being served.
+        return Cache::lock('seo:generate:write', 300)->block(60, fn (): array => $this->write($file));
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function write(string $file): array
     {
         $this->settings->refresh();
         $this->resolver->forgetMemo();
@@ -81,11 +92,19 @@ final class SeoFileGenerator
         $path = $this->path($name);
 
         if (! $this->disk()->exists($path)) {
-            Cache::lock('seo:generate:'.$file, 60)->block(15, function () use ($file, $path): void {
-                if (! $this->disk()->exists($path)) {
-                    $this->generate($file);
-                }
-            });
+            try {
+                Cache::lock('seo:generate:'.$file, 60)->block(15, function () use ($file, $path): void {
+                    if (! $this->disk()->exists($path)) {
+                        $this->generate($file);
+                    }
+                });
+            } catch (LockTimeoutException) {
+                // Another request is still building it; answer with whatever is on disk.
+            }
+
+            if (! $this->disk()->exists($path)) {
+                return null;
+            }
         }
 
         $contents = $this->disk()->get($path);

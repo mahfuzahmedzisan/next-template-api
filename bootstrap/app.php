@@ -5,6 +5,8 @@ use App\Http\Middleware\EnsureTrustedBff;
 use App\Http\Middleware\EnsureTusHook;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\SecurityHeaders;
+use App\Support\ApiResponse;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -46,4 +48,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // Two saves racing past an "already exists" check hit the unique index; that is a conflict, not a 500.
+        $exceptions->render(function (UniqueConstraintViolationException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponse::unprocessable('That value is already in use. Refresh and try again.');
+            }
+        });
     })->create();

@@ -16,6 +16,16 @@ return [
     'default' => env('QUEUE_CONNECTION', 'database'),
 
     /*
+    | Long-running jobs. On redis they get their own connections with a
+    | retry_after above the job timeout; other drivers keep the default.
+    */
+
+    'long' => [
+        'media' => env('MEDIA_QUEUE_CONNECTION', env('QUEUE_CONNECTION') === 'redis' ? 'redis-media' : env('QUEUE_CONNECTION', 'database')),
+        'backups' => env('BACKUP_QUEUE_CONNECTION', env('QUEUE_CONNECTION') === 'redis' ? 'redis-backups' : env('QUEUE_CONNECTION', 'database')),
+    ],
+
+    /*
     |--------------------------------------------------------------------------
     | Queue Connections
     |--------------------------------------------------------------------------
@@ -79,6 +89,26 @@ return [
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('SEO_QUEUE', 'seo'),
             'retry_after' => (int) env('SEO_QUEUE_RETRY_AFTER', 960),
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
+        // HLS transcodes run up to 2 hours and backups up to 1 hour. With the default
+        // 90s retry_after a worker would reserve the job again and fail it mid-run.
+        'redis-media' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'media',
+            'retry_after' => (int) env('MEDIA_QUEUE_RETRY_AFTER', 7300),
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
+        'redis-backups' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'backups',
+            'retry_after' => (int) env('BACKUP_QUEUE_RETRY_AFTER', 3700),
             'block_for' => null,
             'after_commit' => false,
         ],

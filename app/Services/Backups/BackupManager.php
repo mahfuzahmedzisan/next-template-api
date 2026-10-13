@@ -3,6 +3,7 @@
 namespace App\Services\Backups;
 
 use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -236,6 +237,61 @@ class BackupManager
      * @param  array<string, mixed>  $attributes
      */
     public function record(string $operation, string $state, array $attributes = []): void
+    {
+        $this->withStatusLock(fn () => $this->write($operation, $state, $attributes));
+    }
+
+    /**
+     * A run turned away by the lock must not overwrite the status of the run
+     * that holds it, or the screen reports a live restore as failed.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function recordRejected(string $operation, array $attributes): void
+    {
+        $this->withStatusLock(function () use ($operation, $attributes): void {
+            $current = Cache::get(self::STATUS_KEY);
+
+            if (is_array($current) && ($current['state'] ?? null) === self::STATE_RUNNING) {
+                return;
+            }
+
+            $this->write($operation, self::STATE_FAILED, $attributes);
+        });
+    }
+
+    /**
+     * Checks for a running operation and records this one as queued in one
+     * step, so two clicks can't both pass isBusy() and queue two jobs.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function claim(string $operation, array $attributes): bool
+    {
+        return (bool) $this->withStatusLock(function () use ($operation, $attributes): bool {
+            if ($this->isBusy()) {
+                return false;
+            }
+
+            $this->write($operation, self::STATE_QUEUED, $attributes);
+
+            return true;
+        });
+    }
+
+    private function withStatusLock(callable $callback): mixed
+    {
+        try {
+            return Cache::lock('backups:status', 10)->block(5, $callback);
+        } catch (LockTimeoutException) {
+            return $callback();
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function write(string $operation, string $state, array $attributes): void
     {
         $previous = Cache::get(self::STATUS_KEY);
         $sameRun = is_array($previous)

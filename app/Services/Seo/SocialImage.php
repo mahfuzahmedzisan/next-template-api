@@ -2,6 +2,7 @@
 
 namespace App\Services\Seo;
 
+use App\Jobs\Seo\GenerateSocialImage;
 use App\Support\ImageBytes;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
@@ -34,8 +35,7 @@ final class SocialImage
             return null;
         }
 
-        $hash = sha1($stored);
-        $path = self::DIRECTORY.'/'.$hash.'.jpg';
+        $path = self::pathFor($stored);
         $disk = Storage::disk('public');
         $result = ['path' => $path, 'width' => self::WIDTH, 'height' => self::HEIGHT, 'type' => 'image/jpeg'];
 
@@ -43,24 +43,45 @@ final class SocialImage
             return $result;
         }
 
-        $failedKey = 'seo:social-image-failed:'.$hash;
-
-        if (Cache::has($failedKey)) {
+        if (Cache::has(self::failedKey($stored))) {
             return null;
+        }
+
+        // Until the job finishes the caller uses the original image. A sync queue builds it right here.
+        GenerateSocialImage::dispatch($stored);
+
+        return $disk->exists($path) ? $result : null;
+    }
+
+    public function build(string $stored): void
+    {
+        $path = self::pathFor($stored);
+        $disk = Storage::disk('public');
+
+        if ($disk->exists($path) || Cache::has(self::failedKey($stored))) {
+            return;
         }
 
         $bytes = ImageBytes::load($stored);
         $image = $bytes !== null ? ImageBytes::decode($bytes) : null;
 
         if ($image === null) {
-            Cache::put($failedKey, true, self::FAILED_TTL);
+            Cache::put(self::failedKey($stored), true, self::FAILED_TTL);
 
-            return null;
+            return;
         }
 
         $disk->put($path, ImageBytes::jpeg(ImageBytes::cover($image, self::WIDTH, self::HEIGHT), 86));
+    }
 
-        return $result;
+    private static function pathFor(string $stored): string
+    {
+        return self::DIRECTORY.'/'.sha1($stored).'.jpg';
+    }
+
+    private static function failedKey(string $stored): string
+    {
+        return 'seo:social-image-failed:'.sha1($stored);
     }
 
     public static function isSvgPath(string $stored): bool

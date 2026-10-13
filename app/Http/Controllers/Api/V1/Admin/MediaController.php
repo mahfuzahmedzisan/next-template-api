@@ -11,17 +11,20 @@ use App\Http\Requests\Api\V1\Admin\StoreMediaRequest;
 use App\Http\Requests\Api\V1\Admin\StoreMediaThumbnailRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateMediaRequest;
 use App\Http\Resources\MediaResource;
+use App\Jobs\AdoptFinishedUpload;
 use App\Jobs\GenerateHlsJob;
 use App\Models\MediaItem;
 use App\Services\ImageConversionService;
 use App\Services\MediaUploadTokenService;
-use App\Services\StoreFinishedUpload;
 use App\Support\AllowedMedia;
 use App\Support\Query\BuildsApiListQuery;
 use App\Support\ScoutSearch;
 use App\Support\UploadInspector;
+use Illuminate\Bus\UniqueLock;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Spatie\QueryBuilder\AllowedFilter;
 
 class MediaController extends Controller
@@ -63,12 +66,11 @@ class MediaController extends Controller
                         ->implode(' || ');
                 }
 
-                $like = '%'.addcslashes(mb_strtolower($term), '%_\\').'%';
                 $ids = ScoutSearch::keys(MediaItem::class, $term, $options) ?? [];
 
                 // A missing or stale index must not hide rows the database already matches.
-                $query->where(function ($inner) use ($like, $ids): void {
-                    $inner->where('search_text', 'like', $like);
+                $query->where(function ($inner) use ($term, $ids): void {
+                    self::matchSearchText($inner, $term);
 
                     if ($ids !== []) {
                         $inner->orWhereIn($inner->getModel()->getQualifiedKeyName(), $ids);
@@ -82,13 +84,13 @@ class MediaController extends Controller
             'created_at',
         ]);
 
+        $list->with('media');
+
         $page = $list->paginate(BuildsApiListQuery::perPage($request))->withQueryString();
-        $uploads = app(StoreFinishedUpload::class);
 
         foreach ($page->items() as $item) {
             if ($item instanceof MediaItem && $item->status === VideoStatus::AwaitingUpload) {
-                $uploads->adoptIfComplete($item);
-                $item->refresh();
+                AdoptFinishedUpload::dispatch($item->id);
             }
         }
 
@@ -101,6 +103,37 @@ class MediaController extends Controller
                 'last_page' => $page->lastPage(),
             ],
         ]);
+    }
+
+    /**
+     * Uses the search_text full-text index on MySQL and Postgres (MySQL in
+     * prefix mode so "ban" still finds "bangladesh"); SQLite has none and
+     * keeps the LIKE scan.
+     *
+     * @param  Builder<MediaItem>  $query
+     */
+    private static function matchSearchText(Builder $query, string $term): void
+    {
+        $driver = $query->getConnection()->getDriverName();
+
+        if ($driver === 'mysql') {
+            $words = preg_split('/\s+/', trim((string) preg_replace('/[+\-<>()~*"@]+/', ' ', $term))) ?: [];
+            $words = array_values(array_filter($words, fn (string $word): bool => $word !== ''));
+
+            if ($words !== []) {
+                $query->whereFullText('search_text', implode(' ', array_map(fn (string $word): string => $word.'*', $words)), ['mode' => 'boolean']);
+
+                return;
+            }
+        }
+
+        if ($driver === 'pgsql') {
+            $query->whereFullText('search_text', $term, ['language' => 'english']);
+
+            return;
+        }
+
+        $query->where('search_text', 'like', '%'.addcslashes(mb_strtolower($term), '%_\\').'%');
     }
 
     public function slugPreview(Request $request): JsonResponse
@@ -165,10 +198,12 @@ class MediaController extends Controller
         ]);
     }
 
-    public function show(MediaItem $mediaItem, StoreFinishedUpload $uploads): JsonResponse
+    public function show(MediaItem $mediaItem): JsonResponse
     {
-        $uploads->adoptIfComplete($mediaItem);
-        $mediaItem->refresh();
+        if ($mediaItem->status === VideoStatus::AwaitingUpload) {
+            AdoptFinishedUpload::dispatch($mediaItem->id);
+            $mediaItem->refresh();
+        }
 
         return $this->apiSuccess('Media retrieved successfully.', [
             'media' => (new MediaResource($mediaItem))->resolve(),
@@ -238,6 +273,17 @@ class MediaController extends Controller
                 : 'This file is not waiting for another conversion.';
 
             return $this->apiUnprocessable($message);
+        }
+
+        $staleMinutes = max(1, (int) config('media-hls.stale_processing_minutes'));
+
+        if ($mediaItem->status === VideoStatus::Processing) {
+            if ($mediaItem->updated_at?->gt(now()->subMinutes($staleMinutes))) {
+                return $this->apiUnprocessable("This file is still converting. Retry only if it shows no progress for {$staleMinutes} minutes.");
+            }
+
+            // The worker died mid-transcode; its unique lock would silently drop the new job.
+            Cache::lock(UniqueLock::getKey(new GenerateHlsJob($mediaItem->id)))->forceRelease();
         }
 
         if ($mediaItem->getFirstMedia('source') === null) {

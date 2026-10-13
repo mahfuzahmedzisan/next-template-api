@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Validator;
 use Tests\Support\TestSeoable;
@@ -274,6 +275,44 @@ it('validates the site URL as a public https origin in production', function ():
         ->and($check('https://10.0.0.5', true))->toBeFalse()
         ->and($check('https://169.254.169.254', true))->toBeFalse()
         ->and($check('https://8.8.8.8', true))->toBeTrue();
+});
+
+it('never resolves the site URL to a local origin in production', function (): void {
+    config(['services.frontend.urls' => ['http://localhost:3000', 'https://shop.example'], 'services.frontend.revalidate_url' => 'https://shop.example/api/internal/revalidate']);
+    $settings = app(SeoSettings::class);
+
+    expect($settings->siteUrl())->toBe('http://localhost:3000')
+        ->and($settings->siteUrlWarning())->toBeNull();
+
+    app()['env'] = 'production';
+
+    try {
+        expect($settings->siteUrl())->toBe('https://shop.example')
+            ->and($settings->siteUrlWarning())->toBeNull();
+
+        $settings->update(['site_url' => 'http://127.0.0.1:3000']);
+        expect($settings->siteUrl())->toBe('https://shop.example');
+
+        config(['services.frontend.urls' => ['http://localhost:3000'], 'app.url' => 'http://localhost']);
+        expect($settings->siteUrlWarning())->toContain('local address');
+    } finally {
+        app()['env'] = 'testing';
+    }
+});
+
+it('warns in production when the revalidate hook is not configured', function (): void {
+    Log::spy();
+    config(['services.frontend.revalidate_url' => '', 'services.frontend.urls' => ['https://shop.example']]);
+    app()['env'] = 'production';
+
+    try {
+        (new NotifyFrontendRevalidate)->handle();
+        expect(app(SeoSettings::class)->siteUrlWarning())->toContain('FRONTEND_REVALIDATE_URL');
+    } finally {
+        app()['env'] = 'testing';
+    }
+
+    Log::shouldHaveReceived('warning')->once();
 });
 
 it('seeds built-in pages without overwriting admin edits', function (): void {

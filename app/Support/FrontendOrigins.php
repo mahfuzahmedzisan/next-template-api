@@ -49,6 +49,28 @@ class FrontendOrigins
     }
 
     /**
+     * Loopback, `.localhost`/`.local` and private or reserved IP literals.
+     * Hostnames are not resolved, so this stays cheap enough for every request.
+     */
+    public static function isLocal(string $origin): bool
+    {
+        $host = parse_url(trim($origin), PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return false;
+        }
+
+        $host = strtolower(trim($host, '[]'));
+
+        if ($host === 'localhost' || str_ends_with($host, '.localhost') || str_ends_with($host, '.local')) {
+            return true;
+        }
+
+        return filter_var($host, FILTER_VALIDATE_IP) !== false
+            && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    }
+
+    /**
      * Scheme + host + port only. Paths, queries, and trailing slashes are dropped
      * so `https://app.example.com/admin` and `https://app.example.com` match.
      */

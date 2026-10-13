@@ -30,7 +30,7 @@ class BackupOperations
         $lock = $this->backups->lock();
 
         if (! $lock->get()) {
-            $this->backups->record(BackupManager::OPERATION_BACKUP, BackupManager::STATE_FAILED, [
+            $this->backups->recordRejected(BackupManager::OPERATION_BACKUP, [
                 'kind' => $kind,
                 'message' => 'Another backup or restore is already running.',
             ]);
@@ -81,7 +81,7 @@ class BackupOperations
         $lock = $this->backups->lock();
 
         if (! $lock->get()) {
-            $this->backups->record(BackupManager::OPERATION_RESTORE, BackupManager::STATE_FAILED, [
+            $this->backups->recordRejected(BackupManager::OPERATION_RESTORE, [
                 'backup' => $id,
                 'message' => 'Another backup or restore is already running.',
             ]);

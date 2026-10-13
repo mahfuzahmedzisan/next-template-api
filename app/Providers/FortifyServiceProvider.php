@@ -9,6 +9,7 @@ use App\Actions\Fortify\UpdateUserProfileInformation;
 use App\Audit\Audit;
 use App\Audit\AuditEvent;
 use App\Models\User;
+use App\Support\ClientContext;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -47,10 +48,11 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
 
         // 5 attempts/min per email+IP - mirrors Fortify's own default, applied
-        // via the `throttle:login` middleware on POST /auth/login.
+        // via the `throttle:login` middleware on POST /auth/login. Every request
+        // arrives from the BFF, so the visitor's IP comes from ClientContext.
         RateLimiter::for('login', function (Request $request) {
             $throttleKey = Str::transliterate(
-                Str::lower((string) $request->input(Fortify::username())).'|'.$request->ip()
+                Str::lower((string) $request->input(Fortify::username())).'|'.ClientContext::ip($request)
             );
 
             return Limit::perMinute(5)
@@ -77,9 +79,10 @@ class FortifyServiceProvider extends ServiceProvider
         // challenge token + IP rather than Fortify's default session-based
         // `login.id`, which does not exist in this API.
         RateLimiter::for('two-factor', function (Request $request) {
-            $key = (string) $request->input('challenge_token', $request->ip());
+            $ip = (string) ClientContext::ip($request);
+            $key = (string) $request->input('challenge_token', $ip);
 
-            return Limit::perMinute(5)->by($key.'|'.$request->ip());
+            return Limit::perMinute(5)->by(sha1($key).'|'.$ip);
         });
     }
 }

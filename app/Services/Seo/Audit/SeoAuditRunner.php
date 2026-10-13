@@ -13,6 +13,7 @@ use App\Services\Seo\SeoSettings;
 use App\Support\Seo\SeoUrl;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Throwable;
@@ -37,23 +38,35 @@ final class SeoAuditRunner
      */
     public function start(?User $user, bool $includeNoindex = false, string $trigger = 'manual', string $scope = 'full'): ?SeoAudit
     {
-        return DB::transaction(function () use ($user, $includeNoindex, $trigger, $scope): ?SeoAudit {
-            if (SeoAudit::query()->inProgress()->lockForUpdate()->exists()) {
-                return null;
-            }
+        // FOR UPDATE on an empty result locks nothing, so two clicks could both
+        // pass the in-progress check; the cache lock makes the check atomic.
+        $lock = Cache::lock('seo-audit:start', 10);
 
-            $audit = SeoAudit::query()->create([
-                'status' => SeoAudit::QUEUED,
-                'trigger' => $trigger,
-                'scope' => in_array($scope, SeoAudit::SCOPES, true) ? $scope : 'full',
-                'triggered_by' => $user?->id,
-                'include_noindex' => $includeNoindex,
-            ]);
+        if (! $lock->get()) {
+            return null;
+        }
 
-            RunSeoAudit::dispatch($audit->id);
+        try {
+            return DB::transaction(function () use ($user, $includeNoindex, $trigger, $scope): ?SeoAudit {
+                if (SeoAudit::query()->inProgress()->exists()) {
+                    return null;
+                }
 
-            return $audit;
-        });
+                $audit = SeoAudit::query()->create([
+                    'status' => SeoAudit::QUEUED,
+                    'trigger' => $trigger,
+                    'scope' => in_array($scope, SeoAudit::SCOPES, true) ? $scope : 'full',
+                    'triggered_by' => $user?->id,
+                    'include_noindex' => $includeNoindex,
+                ]);
+
+                RunSeoAudit::dispatch($audit->id)->afterCommit();
+
+                return $audit;
+            });
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

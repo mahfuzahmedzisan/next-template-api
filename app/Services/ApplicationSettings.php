@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ApplicationSetting;
 use App\Services\Brand\FaviconSet;
 use App\Support\MediaUrl;
+use Illuminate\Http\File;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
@@ -122,6 +123,9 @@ final class ApplicationSettings
     {
         $this->rememberOriginalMail();
 
+        // This singleton outlives requests in queue workers; re-read so an SMTP change applies to the next mail.
+        $this->flush();
+
         try {
             $enabled = $this->get('smtp', 'enabled') === true;
             $host = $this->text('smtp', 'host', '');
@@ -163,7 +167,28 @@ final class ApplicationSettings
     public function storeBrand(string $kind, UploadedFile $file): void
     {
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'png');
-        $path = $file->storeAs('settings', $kind.'-'.Str::ulid().'.'.$extension, 'public');
+        $name = $kind.'-'.Str::ulid().'.'.$extension;
+        $sanitizer = app(SvgSanitizer::class);
+
+        // Brand files are served from the public disk, so an SVG with script would run on our origin.
+        if ($extension === 'svg' || $sanitizer->isSvg($file)) {
+            try {
+                $clean = $sanitizer->sanitize((string) $file->getRealPath());
+            } catch (\RuntimeException) {
+                throw ValidationException::withMessages(['file' => 'This SVG could not be cleaned. Export it again without scripts.']);
+            }
+
+            $name = $kind.'-'.Str::ulid().'.svg';
+            $path = Storage::disk('public')->putFileAs('settings', new File($clean), $name);
+            @unlink($clean);
+        } else {
+            $path = $file->storeAs('settings', $name, 'public');
+        }
+
+        if (! is_string($path)) {
+            throw ValidationException::withMessages(['file' => 'The file could not be saved.']);
+        }
+
         $previous = $this->text('general', $kind.'_path', '');
         $this->put('general', $kind.'_path', $path);
 

@@ -202,7 +202,7 @@ it('keeps the password out of the two factor challenge token', function (): void
         'password' => 'Password1!',
     ])->json('data.challenge_token');
 
-    $payload = Crypt::decrypt($challenge);
+    $payload = json_decode(Crypt::decryptString($challenge), true);
 
     expect($payload)->toBeArray()
         ->toHaveKeys(['user_id', 'remember', 'nonce', 'expires_at'])
@@ -292,4 +292,60 @@ it('rejects an already-used two factor challenge token', function (): void {
     $this->postJson('/api/v1/auth/two-factor-challenge', $payload)
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['challenge_token']);
+});
+
+it('burns a two factor challenge token after five wrong codes', function (): void {
+    $user = User::factory()->create(['email' => '2fa-burn@example.com', 'password' => 'Password1!']);
+    enableConfirmedTwoFactor($user, 'recovery-code-delta');
+
+    $token = $this->postJson('/api/v1/auth/login', [
+        'email' => '2fa-burn@example.com',
+        'password' => 'Password1!',
+    ])->json('data.challenge_token');
+
+    foreach (range(1, 5) as $attempt) {
+        $this->withHeader('X-Client-IP', "203.0.113.{$attempt}")
+            ->postJson('/api/v1/auth/two-factor-challenge', ['challenge_token' => $token, 'recovery_code' => 'wrong-'.$attempt])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['code']);
+    }
+
+    $this->withHeader('X-Client-IP', '203.0.113.9')
+        ->postJson('/api/v1/auth/two-factor-challenge', ['challenge_token' => $token, 'recovery_code' => 'recovery-code-delta'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['challenge_token']);
+});
+
+it('limits two factor guesses per account across fresh challenge tokens', function (): void {
+    $user = User::factory()->create(['email' => '2fa-account@example.com', 'password' => 'Password1!']);
+    enableConfirmedTwoFactor($user, 'recovery-code-epsilon');
+
+    foreach (range(1, 10) as $attempt) {
+        $token = $this->withHeader('X-Client-IP', "198.51.100.{$attempt}")->postJson('/api/v1/auth/login', [
+            'email' => '2fa-account@example.com',
+            'password' => 'Password1!',
+        ])->json('data.challenge_token');
+
+        $this->withHeader('X-Client-IP', "198.51.100.{$attempt}")
+            ->postJson('/api/v1/auth/two-factor-challenge', ['challenge_token' => $token, 'recovery_code' => 'wrong'])
+            ->assertUnprocessable();
+    }
+
+    $token = $this->withHeader('X-Client-IP', '198.51.100.50')->postJson('/api/v1/auth/login', [
+        'email' => '2fa-account@example.com',
+        'password' => 'Password1!',
+    ])->json('data.challenge_token');
+
+    $this->withHeader('X-Client-IP', '198.51.100.50')
+        ->postJson('/api/v1/auth/two-factor-challenge', ['challenge_token' => $token, 'recovery_code' => 'recovery-code-epsilon'])
+        ->assertTooManyRequests();
+});
+
+it('keys the register limiter on the visitor IP the BFF forwards', function (): void {
+    foreach (range(1, 3) as $attempt) {
+        $this->withHeader('X-Client-IP', '192.0.2.10')->postJson('/api/v1/auth/register', [])->assertStatus(422);
+    }
+
+    $this->withHeader('X-Client-IP', '192.0.2.10')->postJson('/api/v1/auth/register', [])->assertTooManyRequests();
+    $this->withHeader('X-Client-IP', '192.0.2.11')->postJson('/api/v1/auth/register', [])->assertStatus(422);
 });

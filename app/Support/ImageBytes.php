@@ -16,6 +16,8 @@ final class ImageBytes
 {
     public const MAX_BYTES = 10 * 1024 * 1024;
 
+    public const MAX_PIXELS = 40_000_000;
+
     public static function load(?string $stored, int $maxBytes = self::MAX_BYTES): ?string
     {
         $stored = MediaUrl::store($stored);
@@ -26,10 +28,7 @@ final class ImageBytes
 
         try {
             if (preg_match('#^https?://#i', $stored) === 1) {
-                $response = Http::timeout(8)->connectTimeout(4)->get($stored);
-                $body = $response->body();
-
-                return $response->successful() && $body !== '' && strlen($body) <= $maxBytes ? $body : null;
+                return self::download($stored, $maxBytes);
             }
 
             $disk = Storage::disk('public');
@@ -46,9 +45,44 @@ final class ImageBytes
         }
     }
 
+    /**
+     * Streams a remote image and stops reading once it passes the cap, so an
+     * oversized or endless response is never buffered whole.
+     */
+    private static function download(string $url, int $maxBytes): ?string
+    {
+        $response = Http::timeout(8)->connectTimeout(4)->withOptions(['stream' => true])->get($url);
+
+        if (! $response->successful() || (int) $response->header('Content-Length') > $maxBytes) {
+            return null;
+        }
+
+        $stream = $response->toPsrResponse()->getBody();
+        $body = '';
+
+        while (! $stream->eof()) {
+            $body .= $stream->read(65536);
+
+            if (strlen($body) > $maxBytes) {
+                $stream->close();
+
+                return null;
+            }
+        }
+
+        return $body !== '' ? $body : null;
+    }
+
     public static function decode(string $bytes): ?GdImage
     {
         if ($bytes === '' || self::isSvg($bytes)) {
+            return null;
+        }
+
+        // A small file can declare a huge canvas; GD would allocate width x height x 4 bytes.
+        $size = @getimagesizefromstring($bytes);
+
+        if (is_array($size) && $size[0] * $size[1] > self::MAX_PIXELS) {
             return null;
         }
 

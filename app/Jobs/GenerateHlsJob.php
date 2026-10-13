@@ -8,6 +8,7 @@ use App\Enums\VideoStatus;
 use App\Models\MediaItem;
 use App\Services\HlsTranscodeService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\Attributes\FailOnTimeout;
@@ -16,7 +17,7 @@ use Illuminate\Queue\SerializesModels;
 use Throwable;
 
 #[FailOnTimeout]
-class GenerateHlsJob implements ShouldQueue
+class GenerateHlsJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -24,8 +25,17 @@ class GenerateHlsJob implements ShouldQueue
 
     public int $tries = 1;
 
+    /** Matches the timeout, so a retry click can't queue a second transcode of the same file. */
+    public int $uniqueFor = 7200;
+
+    public function uniqueId(): string
+    {
+        return (string) $this->mediaId;
+    }
+
     public function __construct(public int $mediaId)
     {
+        $this->onConnection((string) config('queue.long.media'));
         $this->onQueue('media');
     }
 

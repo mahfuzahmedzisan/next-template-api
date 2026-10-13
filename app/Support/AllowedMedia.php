@@ -74,13 +74,19 @@ final class AllowedMedia
             return 'The file is empty.';
         }
 
-        $max = (int) config('media-hls.max_bytes');
-
-        if ($size > $max) {
+        if ($size > self::maxBytes($type['kind'])) {
             return 'This file is larger than the upload limit.';
         }
 
         return null;
+    }
+
+    public static function maxBytes(MediaKind $kind): int
+    {
+        $max = (int) config('media-hls.max_bytes');
+        $perKind = (int) config('media-hls.max_bytes_by_kind.'.$kind->value, $max);
+
+        return $perKind > 0 ? min($max, $perKind) : $max;
     }
 
     private static function hasBlockedSegment(string $filename): bool

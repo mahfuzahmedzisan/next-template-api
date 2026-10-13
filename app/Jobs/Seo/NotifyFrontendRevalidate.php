@@ -48,6 +48,10 @@ class NotifyFrontendRevalidate implements ShouldQueue
         $secret = (string) config('services.frontend.bff_secret');
 
         if ($url === '' || $secret === '') {
+            if (app()->isProduction()) {
+                Log::warning('Frontend revalidate skipped: FRONTEND_REVALIDATE_URL or BFF_SECRET is not set, so cached SEO data stays stale.');
+            }
+
             return;
         }
 

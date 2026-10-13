@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
@@ -29,6 +30,14 @@ class AuthController extends Controller
 {
     /** How long a pending two-factor challenge stays redeemable. */
     private const CHALLENGE_TTL_MINUTES = 5;
+
+    /** Wrong codes allowed on one challenge token before it is burned. */
+    private const TOKEN_ATTEMPTS = 5;
+
+    /** Wrong codes allowed per account, across tokens, within the decay window. */
+    private const USER_ATTEMPTS = 10;
+
+    private const USER_DECAY_SECONDS = 900;
 
     public function __construct(
         private readonly AuthTokenService $tokens,
@@ -124,6 +133,16 @@ class AuthController extends Controller
             ]);
         }
 
+        // Logging in again mints a fresh challenge token, so the per-token
+        // limiter alone would let one account be guessed indefinitely.
+        $userKey = "2fa:user:{$payload['user_id']}";
+
+        if (RateLimiter::tooManyAttempts($userKey, self::USER_ATTEMPTS)) {
+            return response()->json([
+                'message' => 'Too many two-factor attempts. Try again later.',
+            ], 429, ['Retry-After' => RateLimiter::availableIn($userKey)]);
+        }
+
         /** @var User|null $user */
         $user = User::query()->find($payload['user_id']);
 
@@ -137,6 +156,16 @@ class AuthController extends Controller
         $valid = $this->verifyCode($user, $provider, $request->input('code'), $request->input('recovery_code'));
 
         if (! $valid) {
+            RateLimiter::hit($userKey, self::USER_DECAY_SECONDS);
+
+            $failureKey = "2fa-challenge-failures:{$payload['nonce']}";
+            Cache::add($failureKey, 0, now()->addMinutes(self::CHALLENGE_TTL_MINUTES + 1));
+            $failures = (int) Cache::increment($failureKey);
+
+            if ($failures >= self::TOKEN_ATTEMPTS) {
+                Cache::put($usedKey, true, now()->addMinutes(self::CHALLENGE_TTL_MINUTES + 1));
+            }
+
             Audit::log(AuditEvent::TwoFactorChallengeFailed, subject: $user, properties: [
                 'method' => $usedRecoveryCode ? 'recovery_code' : 'authenticator',
             ]);
@@ -146,7 +175,14 @@ class AuthController extends Controller
             ]);
         }
 
-        Cache::put($usedKey, true, now()->addMinutes(self::CHALLENGE_TTL_MINUTES + 1));
+        // Claiming the nonce atomically stops two parallel requests with the same code.
+        if (! Cache::add($usedKey, true, now()->addMinutes(self::CHALLENGE_TTL_MINUTES + 1))) {
+            throw ValidationException::withMessages([
+                'challenge_token' => ['This login challenge has already been used.'],
+            ]);
+        }
+
+        RateLimiter::clear($userKey);
 
         $token = $this->tokens->issue($user, $request, $payload['remember']);
 
@@ -187,12 +223,12 @@ class AuthController extends Controller
 
     private function createChallengeToken(User $user, bool $remember): string
     {
-        return Crypt::encrypt([
+        return Crypt::encryptString((string) json_encode([
             'user_id' => $user->id,
             'remember' => $remember,
             'nonce' => Str::random(40),
             'expires_at' => now()->addMinutes(self::CHALLENGE_TTL_MINUTES)->getTimestamp(),
-        ]);
+        ]));
     }
 
     /**
@@ -200,8 +236,9 @@ class AuthController extends Controller
      */
     private function decryptChallengeToken(string $token): array
     {
+        // decryptString + JSON: the client sends this token, so never unserialize it.
         try {
-            $payload = Crypt::decrypt($token);
+            $payload = json_decode(Crypt::decryptString($token), true, 4, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
             throw ValidationException::withMessages([
                 'challenge_token' => ['This login challenge has expired or is invalid.'],
@@ -233,15 +270,20 @@ class AuthController extends Controller
         ?string $recoveryCode,
     ): bool {
         if (filled($recoveryCode)) {
-            $codes = $user->recoveryCodes();
+            // Locked so two parallel requests can't both redeem the same code.
+            return (bool) Cache::lock("2fa-recovery:{$user->id}", 10)->block(5, function () use ($user, $recoveryCode): bool {
+                $fresh = $user->fresh() ?? $user;
 
-            if (in_array($recoveryCode, $codes, true)) {
-                $user->replaceRecoveryCode($recoveryCode);
+                foreach ($fresh->recoveryCodes() as $code) {
+                    if (is_string($code) && hash_equals($code, (string) $recoveryCode)) {
+                        $fresh->replaceRecoveryCode($code);
 
-                return true;
-            }
+                        return true;
+                    }
+                }
 
-            return false;
+                return false;
+            });
         }
 
         if (blank($code) || blank($user->two_factor_secret)) {

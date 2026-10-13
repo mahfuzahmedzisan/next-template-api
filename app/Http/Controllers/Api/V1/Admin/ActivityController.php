@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\Enums\ActivityEvent;
 use Spatie\QueryBuilder\AllowedFilter;
@@ -52,26 +53,37 @@ class ActivityController extends Controller
     {
         $day = now()->subDay();
         $week = now()->subWeek();
+        $elevated = AuditSeverity::elevated();
+        $failedSignIns = [
+            AuditEvent::LoginFailed->value,
+            AuditEvent::LoginThrottled->value,
+            AuditEvent::TwoFactorChallengeFailed->value,
+        ];
+        $in = fn (array $values): string => implode(', ', array_fill(0, count($values), '?'));
+
+        // One scan with conditional sums instead of five COUNT queries over the whole log, cached briefly.
+        $stats = Cache::remember('audit:overview-stats', 60, function () use ($day, $week, $elevated, $failedSignIns, $in): array {
+            $counts = Activity::query()
+                ->toBase()
+                ->selectRaw('COUNT(*) as total')
+                ->selectRaw('SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as last_24_hours', [$day])
+                ->selectRaw('SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as last_7_days', [$week])
+                ->selectRaw('SUM(CASE WHEN created_at >= ? AND severity IN ('.$in($elevated).') THEN 1 ELSE 0 END) as elevated_7_days', [$week, ...$elevated])
+                ->selectRaw('SUM(CASE WHEN created_at >= ? AND event IN ('.$in($failedSignIns).') THEN 1 ELSE 0 END) as failed_sign_ins_24_hours', [$day, ...$failedSignIns])
+                ->first();
+
+            return [
+                'total' => (int) ($counts->total ?? 0),
+                'last_24_hours' => (int) ($counts->last_24_hours ?? 0),
+                'last_7_days' => (int) ($counts->last_7_days ?? 0),
+                'elevated_7_days' => (int) ($counts->elevated_7_days ?? 0),
+                'failed_sign_ins_24_hours' => (int) ($counts->failed_sign_ins_24_hours ?? 0),
+                'oldest_at' => Activity::query()->oldest('id')->first(['id', 'created_at'])?->created_at?->toIso8601String(),
+            ];
+        });
 
         return $this->apiSuccess('Audit overview.', [
-            'stats' => [
-                'total' => Activity::query()->count(),
-                'last_24_hours' => Activity::query()->where('created_at', '>=', $day)->count(),
-                'last_7_days' => Activity::query()->where('created_at', '>=', $week)->count(),
-                'elevated_7_days' => Activity::query()
-                    ->where('created_at', '>=', $week)
-                    ->whereIn('severity', AuditSeverity::elevated())
-                    ->count(),
-                'failed_sign_ins_24_hours' => Activity::query()
-                    ->where('created_at', '>=', $day)
-                    ->whereIn('event', [
-                        AuditEvent::LoginFailed->value,
-                        AuditEvent::LoginThrottled->value,
-                        AuditEvent::TwoFactorChallengeFailed->value,
-                    ])
-                    ->count(),
-                'oldest_at' => Activity::query()->oldest('id')->first(['id', 'created_at'])?->created_at?->toIso8601String(),
-            ],
+            'stats' => $stats,
             'retention_days' => $settings->auditRetentionDays(),
             'options' => [
                 'categories' => array_map(fn (AuditCategory $category): array => [

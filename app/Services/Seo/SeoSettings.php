@@ -60,6 +60,7 @@ final class SeoSettings
         return [
             ...$all,
             'site_url_fallback' => $this->fallbackSiteUrl(),
+            'site_url_warning' => $this->siteUrlWarning(),
             'default_og_image_url' => SeoUrl::image($all['site_url'], $all['default_og_image']),
             'identity' => $this->identity(),
         ];
@@ -83,24 +84,56 @@ final class SeoSettings
     }
 
     /**
-     * Admin setting first, then the first FRONTEND_URLS entry.
+     * Admin setting first, then the first FRONTEND_URLS entry. In production a
+     * local origin is never used: canonical links would point at localhost.
      */
     public function siteUrl(): string
     {
         $stored = FrontendOrigins::normalize($this->string('site_url'));
 
-        return $stored ?? $this->fallbackSiteUrl();
+        if ($stored !== null && ! (app()->isProduction() && FrontendOrigins::isLocal($stored))) {
+            return $stored;
+        }
+
+        return $this->fallbackSiteUrl();
     }
 
     public function fallbackSiteUrl(): string
     {
-        $origin = FrontendOrigins::default();
+        $candidates = [...FrontendOrigins::all()];
+        $appUrl = FrontendOrigins::normalize((string) config('app.url'));
 
-        if ($origin !== '') {
-            return $origin;
+        if ($appUrl !== null) {
+            $candidates[] = $appUrl;
         }
 
-        return FrontendOrigins::normalize((string) config('app.url')) ?? 'http://localhost:3000';
+        if (app()->isProduction()) {
+            foreach ($candidates as $origin) {
+                if (! FrontendOrigins::isLocal($origin)) {
+                    return $origin;
+                }
+            }
+        }
+
+        return $candidates[0] ?? 'http://localhost:3000';
+    }
+
+    /** Shown in the admin when production would still publish a local origin. */
+    public function siteUrlWarning(): ?string
+    {
+        if (! app()->isProduction()) {
+            return null;
+        }
+
+        if (FrontendOrigins::isLocal($this->siteUrl())) {
+            return 'Canonical links, the sitemap and social cards point at a local address. Set the Site URL to the public https origin.';
+        }
+
+        if (trim((string) config('services.frontend.revalidate_url')) === '') {
+            return 'FRONTEND_REVALIDATE_URL is not set, so the website keeps cached SEO data for up to an hour after a change.';
+        }
+
+        return null;
     }
 
     /**

@@ -20,6 +20,9 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
      */
     public function update(User $user, array $input): void
     {
+        $emailChanged = isset($input['email']) && is_string($input['email'])
+            && mb_strtolower(trim($input['email'])) !== mb_strtolower((string) $user->email);
+
         Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
 
@@ -30,6 +33,11 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
                 'max:255',
                 Rule::unique('users')->ignore($user->id),
             ],
+
+            // A stolen session must not be able to move the account to a new inbox.
+            'current_password' => $emailChanged
+                ? ['required', 'string', 'current_password:sanctum']
+                : ['nullable'],
         ])->validateWithBag('updateProfileInformation');
 
         if ($input['email'] !== $user->email &&

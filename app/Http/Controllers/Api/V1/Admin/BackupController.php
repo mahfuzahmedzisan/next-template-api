@@ -43,11 +43,15 @@ class BackupController extends Controller
             return $this->apiUnprocessable($blocker);
         }
 
-        $this->backups->record(BackupManager::OPERATION_BACKUP, BackupManager::STATE_QUEUED, [
+        $claimed = $this->backups->claim(BackupManager::OPERATION_BACKUP, [
             'kind' => BackupManager::KIND_MANUAL,
             'user_id' => $request->user()->id,
             'message' => 'Waiting for the backup worker.',
         ]);
+
+        if (! $claimed) {
+            return $this->busy();
+        }
 
         CreateBackupJob::dispatch(BackupManager::KIND_MANUAL, $request->user()->id);
 
@@ -101,11 +105,15 @@ class BackupController extends Controller
             return $this->apiUnprocessable($blocker);
         }
 
-        $this->backups->record(BackupManager::OPERATION_RESTORE, BackupManager::STATE_QUEUED, [
+        $claimed = $this->backups->claim(BackupManager::OPERATION_RESTORE, [
             'backup' => $backup,
             'user_id' => $request->user()->id,
             'message' => 'Waiting for the backup worker.',
         ]);
+
+        if (! $claimed) {
+            return $this->busy();
+        }
 
         // Written before the job runs, so the restore preserves this entry as well.
         Audit::log(AuditEvent::RestoreRequested, subjectLabel: $backup);

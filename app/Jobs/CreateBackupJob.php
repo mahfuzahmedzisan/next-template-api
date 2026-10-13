@@ -22,6 +22,7 @@ class CreateBackupJob implements ShouldQueue
 
     public function __construct(public string $kind, public ?int $userId = null)
     {
+        $this->onConnection((string) config('queue.long.backups'));
         $this->onQueue('backups');
     }
 

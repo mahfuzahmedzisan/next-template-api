@@ -34,6 +34,15 @@ it('updates the authenticated user profile', function (): void {
             'name' => 'After',
             'email' => 'profile-updated@example.com',
         ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['current_password']);
+
+    $this->withToken($login['access_token'])
+        ->putJson('/api/v1/profile', [
+            'name' => 'After',
+            'email' => 'profile-updated@example.com',
+            'current_password' => 'Password1!',
+        ])
         ->assertOk()
         ->assertJsonPath('data.user.name', 'After')
         ->assertJsonPath('data.user.email', 'profile-updated@example.com');

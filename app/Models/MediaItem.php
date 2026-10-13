@@ -12,6 +12,7 @@ use App\Support\Scout\SearchIndexDefinition;
 use App\Support\Scout\SearchIndexField;
 use Database\Factories\MediaItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -255,6 +256,15 @@ class MediaItem extends Model implements DefinesSearchIndex, HasMedia
             SearchIndexField::string('kind', filterable: true, searchable: false),
             SearchIndexField::int64('created_at', sortable: true),
         ]);
+    }
+
+    /**
+     * @param  Builder<MediaItem>  $query
+     * @return Builder<MediaItem>
+     */
+    protected function makeAllSearchableUsing($query)
+    {
+        return $query->with('media');
     }
 
     /**

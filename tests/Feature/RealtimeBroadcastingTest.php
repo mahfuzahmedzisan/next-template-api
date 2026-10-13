@@ -32,7 +32,7 @@ beforeEach(function (): void {
 
 function realtimeToken(): string
 {
-    User::factory()->create([
+    User::factory()->admin()->create([
         'email' => 'admin@example.com',
         'password' => 'Password1!',
     ]);
@@ -114,4 +114,11 @@ it('reports broadcasting config without secrets', function (): void {
         ->assertJsonPath('data.app_key_preview', 'test-key...');
 
     expect($response->getContent())->not->toContain('test-secret-value');
+});
+
+it('keeps the realtime diagnostics admin only', function (): void {
+    $member = User::factory()->create();
+
+    actingAsSanctum($member)->getJson('/api/v1/realtime/ping?message=hello')->assertForbidden();
+    actingAsSanctum($member)->postJson('/api/v1/realtime/test-notification')->assertForbidden();
 });
