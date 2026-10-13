@@ -276,13 +276,13 @@ final class ScannedPage
     }
 
     /**
-     * Visible text bytes as a share of the HTML bytes, in percent. Inline
-     * framework data (the Next.js RSC payload) is left out unless asked for:
-     * it repeats the rendered page for hydration and the author cannot trim it.
+     * Visible text bytes as a share of the whole HTML, in percent - the same
+     * figure external checkers report. Inline framework data (the Next.js RSC
+     * payload) can be left out to show how much of the weight it accounts for.
      */
-    public function textRatio(bool $withFrameworkData = false): float
+    public function textRatio(bool $withoutFrameworkData = false): float
     {
-        $html = strlen($this->html) - ($withFrameworkData ? 0 : $this->frameworkDataBytes());
+        $html = strlen($this->html) - ($withoutFrameworkData ? $this->frameworkDataBytes() : 0);
 
         return $html <= 0 ? 0.0 : round(strlen($this->visibleText()) / $html * 100, 1);
     }

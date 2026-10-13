@@ -86,12 +86,13 @@ it('catches the checker issue', function (string $issue): void {
         ->and($failed['actual'])->toContain($actual);
 })->with(fn () => array_keys(checkerIssues()));
 
-it('leaves the Next.js RSC payload out of the text-to-code ratio but reports the raw figure', function (): void {
+it('counts the Next.js RSC payload in the text-to-code ratio like external checkers do', function (): void {
     $flight = '<script>self.__next_f.push([1,"'.str_repeat('chunk', 12000).'"])</script>';
     $row = checkResults(goldenAudit(['html' => ['</body>' => $flight.'</body>']]), 'text_ratio')->first();
 
-    expect($row['passed'])->toBeTrue()
-        ->and($row['actual'])->toMatch('/^[\d.]+% \([\d.]+% with Next\.js data\)$/');
+    expect($row['passed'])->toBeFalse()
+        ->and($row['actual'])->toMatch('/^[\d.]+% \([\d.]+% without Next\.js data\)$/')
+        ->and($row['message'])->toContain('RSC payload');
 });
 
 it('fails real checks when the body content sits behind a client-side streaming swap', function (): void {

@@ -696,12 +696,14 @@ final class SeoPageScanner
         $min = (int) config('seo.audit.thresholds.text_ratio', 10);
         $ratio = $page->textRatio();
         $actual = $page->frameworkDataBytes() > 0
-            ? "{$ratio}% ({$page->textRatio(withFrameworkData: true)}% with Next.js data)"
+            ? "{$ratio}% ({$page->textRatio(withoutFrameworkData: true)}% without Next.js data)"
             : "{$ratio}%";
 
-        return $ratio >= $min
-            ? $this->result(true, $actual, "{$min}%+", 'Good balance of text and code.')
-            : $this->result(false, $actual, "{$min}%+", 'Most of the HTML is code. Add text or trim inline scripts and styles.');
+        return match (true) {
+            $ratio >= $min => $this->result(true, $actual, "{$min}%+", 'Good balance of text and code.'),
+            $page->frameworkDataBytes() > 0 => $this->result(false, $actual, "{$min}%+", 'Most of the HTML is code, largely the Next.js RSC payload. Add real text, shorten repeated class lists and keep props sent to client components small.'),
+            default => $this->result(false, $actual, "{$min}%+", 'Most of the HTML is code. Add text or trim inline scripts and styles.'),
+        };
     }
 
     private function internalLinks(ScannedPage $page): array
