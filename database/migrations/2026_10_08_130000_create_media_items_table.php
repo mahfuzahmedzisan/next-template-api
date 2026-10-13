@@ -28,8 +28,12 @@ return new class extends Migration
             $table->unsignedSmallInteger('height')->nullable();
             $table->string('hls_path')->nullable();
             $table->string('tus_id')->nullable()->index();
-            $table->foreignId('uploaded_by')->constrained('users')->cascadeOnDelete();
+            // Deleting an admin keeps the media library they uploaded.
+            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
+
+            $table->index(['status', 'created_at']);
+            $table->index('created_at');
         });
 
         $driver = Schema::getConnection()->getDriverName();
