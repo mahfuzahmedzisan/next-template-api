@@ -19,15 +19,45 @@ class SeoPageSeeder extends Seeder
      * Copy earlier releases seeded. A field still holding one of these values
      * was never edited, so it is upgraded like an empty one.
      *
-     * @var array<string, array<string, mixed>>
+     * @var array<string, array<string, list<mixed>>>
      */
     private const SUPERSEDED = [
         '/' => [
-            'meta_title' => '{{site_name}} — Private workspace and portfolio',
-            'meta_description' => 'Sign in to manage your profile, password and two-factor authentication in one private workspace, kept apart from the public portfolio.',
-            'keywords' => ['portfolio', 'private workspace', 'account security', 'two-factor authentication'],
+            'meta_title' => [
+                '{{site_name}} — Private workspace and portfolio',
+                'Mahfuz Ahmed: Full-Stack Developer for Next.js and Laravel',
+            ],
+            'meta_description' => [
+                'Sign in to manage your profile, password and two-factor authentication in one private workspace, kept apart from the public portfolio.',
+                'Full-stack developer Mahfuz Ahmed builds fast, accessible web apps with Next.js and Laravel, from first sketch to launch, with weekly releases and support.',
+            ],
+            'keywords' => [
+                ['portfolio', 'private workspace', 'account security', 'two-factor authentication'],
+                ['full-stack developer', 'Next.js developer', 'Laravel developer', 'web application development', 'technical SEO'],
+            ],
+        ],
+        '/about' => [
+            'meta_title' => ['About Mahfuz Ahmed, Full-Stack Web Developer in Dhaka'],
+            'meta_description' => ['Meet Mahfuz Ahmed, a full-stack developer with ten years of Next.js, React and Laravel experience who turns messy processes into simple, reliable web apps.'],
+            'keywords' => [['about Mahfuz Ahmed', 'full-stack developer Dhaka', 'Next.js', 'Laravel', 'freelance web developer']],
+        ],
+        '/projects' => [
+            'meta_title' => ['Projects and Case Studies by Full-Stack Developer Mahfuz'],
+        ],
+        '/contact' => [
+            'meta_title' => ['Contact Mahfuz Ahmed to Discuss Your Next Web Project'],
+            'meta_description' => ['Tell Mahfuz Ahmed about your team and the problem you want to solve. Get a personal reply within two working days, a free call and a short written proposal.'],
+            'keywords' => [['contact', 'hire a full-stack developer', 'web project quote', 'Next.js consultant']],
+        ],
+        '/terms' => [
+            'meta_title' => ['Terms of Service for the Mahfuz Ahmed Portfolio Website'],
         ],
     ];
+
+    /** Earlier seeded default authors, replaced like an empty value. */
+    private const SUPERSEDED_AUTHORS = ['Mahfuz Ahmed'];
+
+    private const DEFAULT_AUTHOR = 'Next Template';
 
     private bool $changed = false;
 
@@ -80,9 +110,9 @@ class SeoPageSeeder extends Seeder
                 'sitemap_priority' => 1.0,
                 'sitemap_changefreq' => 'weekly',
             ], [
-                'meta_title' => 'Mahfuz Ahmed: Full-Stack Developer for Next.js and Laravel',
-                'meta_description' => 'Full-stack developer Mahfuz Ahmed builds fast, accessible web apps with Next.js and Laravel, from first sketch to launch, with weekly releases and support.',
-                'keywords' => ['full-stack developer', 'Next.js developer', 'Laravel developer', 'web application development', 'technical SEO'],
+                'meta_title' => 'Next Template: Next.js and Laravel Web Studio for Teams',
+                'meta_description' => 'Next Template is a small web studio building fast, accessible web apps with Next.js and Laravel, from first sketch to launch, with weekly releases and support.',
+                'keywords' => ['web studio', 'Next.js development', 'Laravel development', 'web application development', 'technical SEO'],
             ]],
             '/about' => ['About', 'about', [
                 'schema_type' => 'AboutPage',
@@ -90,9 +120,9 @@ class SeoPageSeeder extends Seeder
                 'sitemap_priority' => 0.8,
                 'sitemap_changefreq' => 'monthly',
             ], [
-                'meta_title' => 'About Mahfuz Ahmed, Full-Stack Web Developer in Dhaka',
-                'meta_description' => 'Meet Mahfuz Ahmed, a full-stack developer with ten years of Next.js, React and Laravel experience who turns messy processes into simple, reliable web apps.',
-                'keywords' => ['about Mahfuz Ahmed', 'full-stack developer Dhaka', 'Next.js', 'Laravel', 'freelance web developer'],
+                'meta_title' => 'About Next Template, a Next.js and Laravel Web Studio',
+                'meta_description' => 'Meet Next Template, a small studio with ten years of Next.js, React and Laravel experience that turns messy processes into simple, reliable web apps for teams.',
+                'keywords' => ['about Next Template', 'web studio', 'Next.js', 'Laravel', 'remote web development team'],
             ]],
             '/services' => ['Services', 'landing', [
                 'schema_type' => 'WebPage',
@@ -108,7 +138,7 @@ class SeoPageSeeder extends Seeder
                 'sitemap_priority' => 0.9,
                 'sitemap_changefreq' => 'weekly',
             ], [
-                'meta_title' => 'Projects and Case Studies by Full-Stack Developer Mahfuz',
+                'meta_title' => 'Projects and Case Studies from the Next Template Studio',
                 'meta_description' => 'Case studies of dashboards, booking systems, portals and storefronts built with Next.js and Laravel, each with the problem, approach and measured results.',
                 'keywords' => ['portfolio', 'case studies', 'Next.js projects', 'Laravel projects', 'web applications'],
             ]],
@@ -126,9 +156,9 @@ class SeoPageSeeder extends Seeder
                 'sitemap_priority' => 0.7,
                 'sitemap_changefreq' => 'yearly',
             ], [
-                'meta_title' => 'Contact Mahfuz Ahmed to Discuss Your Next Web Project',
-                'meta_description' => 'Tell Mahfuz Ahmed about your team and the problem you want to solve. Get a personal reply within two working days, a free call and a short written proposal.',
-                'keywords' => ['contact', 'hire a full-stack developer', 'web project quote', 'Next.js consultant'],
+                'meta_title' => 'Contact Next Template to Discuss Your Next Web Project',
+                'meta_description' => 'Tell Next Template about your team and the problem you want to solve. Get a reply within two working days, a free call and a short written proposal.',
+                'keywords' => ['contact', 'hire a web studio', 'web project quote', 'Next.js consultants'],
             ]],
             '/privacy-policy' => ['Privacy policy', 'legal', [
                 'schema_type' => 'WebPage',
@@ -144,21 +174,23 @@ class SeoPageSeeder extends Seeder
                 'sitemap_priority' => 0.3,
                 'sitemap_changefreq' => 'yearly',
             ], [
-                'meta_title' => 'Terms of Service for the Mahfuz Ahmed Portfolio Website',
+                'meta_title' => 'Terms of Service for the Next Template Studio Website',
                 'meta_description' => 'The rules for using this website and its private workspace: acceptable use, accounts, content ownership, project agreements, disclaimers and liability.',
                 'keywords' => ['terms of service', 'terms and conditions', 'acceptable use', 'website terms'],
             ]],
         ];
     }
 
-    /** Global SEO defaults, written only while the admin has left them empty. */
+    /** Global SEO defaults, written only while the admin has left them empty or unchanged from an older seed. */
     private function settingsDefaults(): void
     {
         $seo = app(SeoSettings::class);
         $current = $seo->all();
 
+        $author = $current['default_author'];
+
         $values = array_filter([
-            'default_author' => $current['default_author'] === '' ? 'Mahfuz Ahmed' : null,
+            'default_author' => $author === '' || in_array($author, self::SUPERSEDED_AUTHORS, true) ? self::DEFAULT_AUTHOR : null,
         ]);
 
         if ($values !== []) {
@@ -187,7 +219,7 @@ class SeoPageSeeder extends Seeder
         foreach ($content as $field => $value) {
             $current = $page->getAttribute($field);
 
-            if (blank($current) || (array_key_exists($field, $superseded) && $current === $superseded[$field])) {
+            if (blank($current) || in_array($current, $superseded[$field] ?? [], true)) {
                 $page->setAttribute($field, $value);
             }
         }
