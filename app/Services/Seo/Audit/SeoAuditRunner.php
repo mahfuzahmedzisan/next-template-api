@@ -8,6 +8,7 @@ use App\Models\SeoAudit;
 use App\Models\SeoAuditPage;
 use App\Models\SeoPage;
 use App\Models\User;
+use App\Notifications\SeoHealthScoreDroppedNotification;
 use App\Services\Seo\SeoResolver;
 use App\Services\Seo\SeoSettings;
 use App\Support\Seo\SeoUrl;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Throwable;
 
 /**
@@ -360,6 +362,13 @@ final class SeoAuditRunner
             }
         }
 
+        $previousScore = SeoAudit::query()
+            ->where('status', SeoAudit::COMPLETED)
+            ->whereKeyNot($audit->id)
+            ->whereNotNull('score')
+            ->latest('finished_at')
+            ->value('score');
+
         $audit->forceFill([
             'status' => SeoAudit::COMPLETED,
             'score' => $weights === 0 ? null : (int) round($weighted / $weights),
@@ -377,7 +386,29 @@ final class SeoAuditRunner
             'finished_at' => now(),
         ])->save();
 
+        $this->notifyOnScoreDrop($previousScore, $audit->score);
+
         $this->prune();
+    }
+
+    /**
+     * Only worth an alert past a double-digit drop — single-point noise
+     * (a page going temporarily unreachable, a changed redirect) isn't.
+     */
+    private function notifyOnScoreDrop(?int $previousScore, ?int $currentScore): void
+    {
+        if ($previousScore === null || $currentScore === null) {
+            return;
+        }
+
+        if ($previousScore - $currentScore < 10) {
+            return;
+        }
+
+        Notification::send(
+            User::query()->admins()->get(),
+            new SeoHealthScoreDroppedNotification($previousScore, $currentScore),
+        );
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BroadcastAuthController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\MediaFileController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\ProfileActivityController;
@@ -59,6 +60,16 @@ Route::middleware(['auth:sanctum', 'role:admin', 'throttle:30,1'])->group(functi
     Route::get('realtime/ping', [RealtimeController::class, 'ping']);
     Route::get('realtime/health', [RealtimeController::class, 'health']);
     Route::post('realtime/test-notification', [RealtimeController::class, 'testNotification']);
+});
+
+Route::middleware('auth:sanctum')->prefix('notifications')->group(function (): void {
+    Route::get('/', [NotificationController::class, 'index']);
+    Route::get('unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('{notification}/read', [NotificationController::class, 'markRead'])
+        ->where('notification', '[0-9a-fA-F-]{36}');
+    Route::delete('{notification}', [NotificationController::class, 'destroy'])
+        ->where('notification', '[0-9a-fA-F-]{36}');
 });
 
 Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {

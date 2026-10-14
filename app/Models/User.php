@@ -13,6 +13,7 @@ use App\Support\Scout\SearchIndexField;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -82,6 +83,15 @@ class User extends Authenticatable implements DefinesSearchIndex
     public function isAdmin(): bool
     {
         return $this->role === UserRole::Admin;
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeAdmins(Builder $query): Builder
+    {
+        return $query->where('role', UserRole::Admin);
     }
 
     public function avatarUrl(): ?string
