@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Audit\Audit;
+use App\Audit\AuditCategory;
 use App\Audit\AuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BackupResource;
 use App\Jobs\CreateBackupJob;
 use App\Jobs\RestoreBackupJob;
+use App\Models\Activity;
 use App\Services\Backups\BackupManager;
 use App\Support\ApiResponse;
+use App\Support\Stats\DailyBuckets;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -31,6 +34,28 @@ class BackupController extends Controller
     public function index(): JsonResponse
     {
         return $this->apiSuccess('Backups retrieved successfully.', $this->payload());
+    }
+
+    public function history(Request $request): JsonResponse
+    {
+        $buckets = DailyBuckets::fromRequest($request);
+
+        $runs = Activity::query()
+            ->forCategory(AuditCategory::Backups->value)
+            ->whereIn('event', [AuditEvent::BackupCompleted->value, AuditEvent::BackupFailed->value]);
+        $latest = (int) (clone $runs)->max('id');
+
+        $data = Cache::remember($buckets->cacheKey('backups:history:'.$latest), 60, fn (): array => [
+            ...$buckets->meta(),
+            'daily' => $buckets->count(
+                $runs,
+                "CASE WHEN event = ? THEN 'completed' ELSE 'failed' END",
+                ['completed', 'failed'],
+                [AuditEvent::BackupCompleted->value],
+            ),
+        ]);
+
+        return $this->apiSuccess('Backup history.', $data);
     }
 
     public function store(Request $request): JsonResponse

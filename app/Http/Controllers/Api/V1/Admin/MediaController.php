@@ -19,6 +19,7 @@ use App\Services\MediaUploadTokenService;
 use App\Support\AllowedMedia;
 use App\Support\Query\BuildsApiListQuery;
 use App\Support\ScoutSearch;
+use App\Support\Stats\DailyBuckets;
 use App\Support\UploadInspector;
 use Illuminate\Bus\UniqueLock;
 use Illuminate\Database\Eloquent\Builder;
@@ -134,6 +135,48 @@ class MediaController extends Controller
         }
 
         $query->where('search_text', 'like', '%'.addcslashes(mb_strtolower($term), '%_\\').'%');
+    }
+
+    public function stats(Request $request): JsonResponse
+    {
+        $buckets = DailyBuckets::fromRequest($request);
+
+        $data = Cache::remember($buckets->cacheKey('media:stats:'.MediaItem::statsVersion()), 60, function () use ($buckets): array {
+            $kinds = array_map(fn (MediaKind $kind): string => $kind->value, MediaKind::cases());
+
+            $byKind = MediaItem::query()
+                ->toBase()
+                ->selectRaw('kind, COUNT(*) as aggregate, COALESCE(SUM(size), 0) as bytes')
+                ->groupBy('kind')
+                ->get()
+                ->keyBy('kind');
+
+            $byStatus = MediaItem::query()
+                ->toBase()
+                ->selectRaw('status, COUNT(*) as aggregate')
+                ->groupBy('status')
+                ->pluck('aggregate', 'status');
+
+            return [
+                ...$buckets->meta(),
+                'totals' => [
+                    'count' => (int) $byKind->sum('aggregate'),
+                    'bytes' => (int) $byKind->sum('bytes'),
+                ],
+                'by_kind' => array_map(fn (string $kind): array => [
+                    'value' => $kind,
+                    'count' => (int) ($byKind[$kind]->aggregate ?? 0),
+                    'bytes' => (int) ($byKind[$kind]->bytes ?? 0),
+                ], $kinds),
+                'by_status' => array_map(fn (VideoStatus $status): array => [
+                    'value' => $status->value,
+                    'count' => (int) ($byStatus[$status->value] ?? 0),
+                ], VideoStatus::cases()),
+                'uploads' => $buckets->count(MediaItem::query(), 'kind', $kinds),
+            ];
+        });
+
+        return $this->apiSuccess('Media stats.', $data);
     }
 
     public function slugPreview(Request $request): JsonResponse

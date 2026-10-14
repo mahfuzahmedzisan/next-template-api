@@ -71,6 +71,7 @@ Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
     Route::delete('/', [ProfileController::class, 'destroy']);
 
     Route::get('activity', [ProfileActivityController::class, 'index']);
+    Route::get('activity/stats', [ProfileActivityController::class, 'stats']);
 
     Route::prefix('devices')->group(function (): void {
         Route::get('/', [DeviceController::class, 'index']);
@@ -111,6 +112,7 @@ Route::middleware(['auth:sanctum', 'role:admin', 'throttle:admin-users'])->group
 
     Route::get('admin/media', [MediaController::class, 'index']);
     Route::get('admin/media/slug-preview', [MediaController::class, 'slugPreview']);
+    Route::get('admin/media/stats', [MediaController::class, 'stats']);
     Route::post('admin/media', [MediaController::class, 'store']);
     Route::get('admin/media/{mediaItem}', [MediaController::class, 'show']);
     Route::patch('admin/media/{mediaItem}', [MediaController::class, 'update']);
@@ -148,12 +150,14 @@ Route::middleware(['auth:sanctum', 'role:admin', 'throttle:admin-users'])->group
     Route::prefix('admin/audit')->group(function (): void {
         Route::get('/', [ActivityController::class, 'index']);
         Route::get('overview', [ActivityController::class, 'overview']);
+        Route::get('trend', [ActivityController::class, 'trend']);
         Route::get('export', [ActivityController::class, 'export'])->middleware('throttle:5,1');
         Route::get('{activity}', [ActivityController::class, 'show'])->whereNumber('activity');
     });
 
     Route::prefix('admin/backups')->group(function (): void {
         Route::get('/', [BackupController::class, 'index']);
+        Route::get('history', [BackupController::class, 'history']);
         Route::get('download/{token}', [BackupController::class, 'download'])->where('token', '[A-Za-z0-9]{64}');
 
         Route::middleware('throttle:10,1')->group(function (): void {

@@ -130,6 +130,7 @@ class BackupManager
         return [
             'count' => $backups->count(),
             'total_size' => (int) $backups->sum('size'),
+            'max_storage_bytes' => $this->maxStorageBytes(),
             'newest_at' => $backups->first()['created_at'] ?? null,
             'retention_days' => (int) config('backup.schedule.retention_days', 14),
             'schedule' => [
@@ -144,6 +145,14 @@ class BackupManager
             'restore_supported' => $backupBlocker === null && $this->restoreBlocker() === null,
             'restore_unsupported_reason' => $backupBlocker ?? $this->restoreBlocker(),
         ];
+    }
+
+    /** Cleanup prunes the oldest backups above this size; null means unlimited. */
+    public function maxStorageBytes(): ?int
+    {
+        $megabytes = config('backup.cleanup.default_strategy.delete_oldest_backups_when_using_more_megabytes_than');
+
+        return is_numeric($megabytes) && (int) $megabytes > 0 ? (int) $megabytes * 1024 * 1024 : null;
     }
 
     public function nextRunAt(): Carbon

@@ -12,6 +12,7 @@ use App\Http\Resources\ActivityResource;
 use App\Models\Activity;
 use App\Services\ApplicationSettings;
 use App\Support\Query\BuildsApiListQuery;
+use App\Support\Stats\DailyBuckets;
 use App\Support\UserAgent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -109,6 +110,49 @@ class ActivityController extends Controller
                 'subjects' => array_keys((array) config('audit.subjects', [])),
             ],
         ]);
+    }
+
+    public function trend(Request $request): JsonResponse
+    {
+        $buckets = DailyBuckets::fromRequest($request);
+
+        // The newest id in the key lets a refresh after new entries skip the cache.
+        $latest = (int) Activity::query()->max('id');
+
+        $data = Cache::remember($buckets->cacheKey('audit:trend:'.$latest), 60, function () use ($buckets): array {
+            $severities = array_map(fn (AuditSeverity $severity): string => $severity->value, AuditSeverity::cases());
+            $categories = array_map(fn (AuditCategory $category): string => $category->value, AuditCategory::cases());
+            $failedSignIns = [
+                AuditEvent::LoginFailed->value,
+                AuditEvent::LoginThrottled->value,
+                AuditEvent::TwoFactorChallengeFailed->value,
+            ];
+
+            $daily = $buckets->count(Activity::query(), 'severity', $severities);
+            $dailyCategories = $buckets->count(Activity::query(), 'log_name', $categories);
+            $categoryTotals = DailyBuckets::totals($dailyCategories, $categories);
+
+            $signIns = $buckets->count(
+                Activity::query()->whereIn('event', [AuditEvent::LoginSucceeded->value, ...$failedSignIns]),
+                "CASE WHEN event = ? THEN 'succeeded' ELSE 'failed' END",
+                ['succeeded', 'failed'],
+                [AuditEvent::LoginSucceeded->value],
+            );
+
+            return [
+                ...$buckets->meta(),
+                'daily' => $daily,
+                'daily_categories' => $dailyCategories,
+                'by_category' => array_map(fn (AuditCategory $category): array => [
+                    'value' => $category->value,
+                    'label' => $category->label(),
+                    'count' => $categoryTotals[$category->value],
+                ], AuditCategory::cases()),
+                'sign_ins' => $signIns,
+            ];
+        });
+
+        return $this->apiSuccess('Audit trend.', $data);
     }
 
     public function show(Activity $activity): JsonResponse

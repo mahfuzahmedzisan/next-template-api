@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
@@ -79,6 +80,14 @@ class MediaItem extends Model implements DefinesSearchIndex, HasMedia
             }
         });
 
+        static::saved(function (MediaItem $item): void {
+            if ($item->wasRecentlyCreated || $item->wasChanged(['kind', 'status', 'size'])) {
+                self::refreshStatsVersion();
+            }
+        });
+
+        static::deleted(fn () => self::refreshStatsVersion());
+
         static::deleting(function (MediaItem $item): void {
             if ($item->ulid) {
                 Storage::disk('public')->deleteDirectory('media/'.$item->ulid);
@@ -91,6 +100,20 @@ class MediaItem extends Model implements DefinesSearchIndex, HasMedia
                 @unlink($directory.DIRECTORY_SEPARATOR.$item->tus_id.'.info');
             }
         });
+    }
+
+    /**
+     * Part of the library stats cache key, so uploads and deletes show up
+     * on the next stats request instead of after the cache expires.
+     */
+    public static function statsVersion(): string
+    {
+        return (string) Cache::get('media:stats-version', '0');
+    }
+
+    private static function refreshStatsVersion(): void
+    {
+        Cache::forever('media:stats-version', (string) Str::ulid());
     }
 
     /**
