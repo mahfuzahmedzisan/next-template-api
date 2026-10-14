@@ -12,9 +12,9 @@ use Illuminate\Validation\Rule;
 /**
  * Counts rows per calendar day in the viewer's timezone.
  *
- * SQL groups by hour in the application timezone (portable across MySQL,
- * PostgreSQL and SQLite), then PHP folds those hours into local days and
- * zero-fills the gaps, so the chart always has one point per day.
+ * SQL groups by quarter hour in the application timezone (portable across
+ * MySQL, PostgreSQL and SQLite), then PHP folds those slots into local days
+ * and zero-fills the gaps, so the chart always has one point per day.
  */
 final class DailyBuckets
 {
@@ -111,7 +111,7 @@ final class DailyBuckets
         $keys = $split === null ? ['count'] : $series;
 
         $base->where($column, '>=', $this->start()->setTimezone((string) config('app.timezone')))
-            ->selectRaw($this->hourExpression($base, $column).' as bucket')
+            ->selectRaw($this->quarterHourExpression($base, $column).' as bucket')
             ->groupBy('bucket');
 
         if ($split !== null) {
@@ -159,14 +159,18 @@ final class DailyBuckets
         return $totals;
     }
 
-    private function hourExpression(Builder $query, string $column): string
+    /**
+     * Every real UTC offset is a multiple of 15 minutes (India +5:30, Nepal
+     * +5:45), so a quarter-hour slot never straddles a local midnight.
+     */
+    private function quarterHourExpression(Builder $query, string $column): string
     {
         $column = $query->getGrammar()->wrap($column);
 
         return match ($query->getConnection()->getDriverName()) {
-            'mysql', 'mariadb' => "DATE_FORMAT({$column}, '%Y-%m-%d %H:00:00')",
-            'pgsql' => "to_char(date_trunc('hour', {$column}), 'YYYY-MM-DD HH24:00:00')",
-            default => "strftime('%Y-%m-%d %H:00:00', {$column})",
+            'mysql', 'mariadb' => "CONCAT(DATE_FORMAT({$column}, '%Y-%m-%d %H:'), LPAD(FLOOR(MINUTE({$column}) / 15) * 15, 2, '0'), ':00')",
+            'pgsql' => "to_char(date_trunc('hour', {$column}) + floor(extract(minute from {$column}) / 15) * interval '15 minutes', 'YYYY-MM-DD HH24:MI:00')",
+            default => "strftime('%Y-%m-%d %H:', {$column}) || printf('%02d', (CAST(strftime('%M', {$column}) AS INTEGER) / 15) * 15) || ':00'",
         };
     }
 

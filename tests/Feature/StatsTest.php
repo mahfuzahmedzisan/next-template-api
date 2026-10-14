@@ -110,6 +110,27 @@ it('folds hours into the viewer timezone day', function (): void {
         ->and(pointFor($dhaka, '2026-10-14')['info'])->toBe(1);
 });
 
+it('splits an hour across local midnight in half-hour and quarter-hour zones', function (string $tz, string $before, string $after): void {
+    $admin = statsAdmin();
+    DB::table('activity_log')->delete();
+
+    logActivity($before);
+    logActivity($after);
+
+    $daily = actingAsSanctum($admin)
+        ->getJson('/api/v1/admin/audit/trend?days=7&tz='.$tz)
+        ->assertJsonPath('data.timezone', $tz)
+        ->json('data.daily');
+
+    expect(pointFor($daily, '2026-10-13')['info'])->toBe(1)
+        ->and(pointFor($daily, '2026-10-14')['info'])->toBe(1);
+})->with([
+    // 18:29 UTC is 23:59 in Kolkata; 18:30 UTC is 00:00 the next day.
+    'Asia/Kolkata' => ['Asia/Kolkata', '2026-10-13 18:29:59', '2026-10-13 18:30:00'],
+    // 18:14 UTC is 23:59 in Kathmandu; 18:15 UTC is 00:00 the next day.
+    'Asia/Kathmandu' => ['Asia/Kathmandu', '2026-10-13 18:14:59', '2026-10-13 18:15:00'],
+]);
+
 it('validates the range and falls back to the user then UTC timezone', function (): void {
     $admin = statsAdmin();
 
