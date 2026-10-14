@@ -10,6 +10,7 @@ use App\Http\Resources\BackupResource;
 use App\Jobs\CreateBackupJob;
 use App\Jobs\RestoreBackupJob;
 use App\Models\Activity;
+use App\Services\ApplicationSettings;
 use App\Services\Backups\BackupManager;
 use App\Support\ApiResponse;
 use App\Support\Stats\DailyBuckets;
@@ -36,7 +37,7 @@ class BackupController extends Controller
         return $this->apiSuccess('Backups retrieved successfully.', $this->payload());
     }
 
-    public function history(Request $request): JsonResponse
+    public function history(Request $request, ApplicationSettings $settings): JsonResponse
     {
         $buckets = DailyBuckets::fromRequest($request);
 
@@ -55,7 +56,7 @@ class BackupController extends Controller
             ),
         ]);
 
-        return $this->apiSuccess('Backup history.', $data);
+        return $this->apiSuccess('Backup history.', [...$data, 'retention_days' => $settings->auditRetentionDays()]);
     }
 
     public function store(Request $request): JsonResponse

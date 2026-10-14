@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ActivityResource;
 use App\Models\Activity;
 use App\Models\User;
+use App\Services\ApplicationSettings;
 use App\Support\Query\BuildsApiListQuery;
 use App\Support\Stats\DailyBuckets;
 use Illuminate\Database\Eloquent\Builder;
@@ -47,7 +48,7 @@ class ProfileActivityController extends Controller
         ]);
     }
 
-    public function stats(Request $request): JsonResponse
+    public function stats(Request $request, ApplicationSettings $settings): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -68,7 +69,7 @@ class ProfileActivityController extends Controller
             ];
         });
 
-        return $this->apiSuccess('Activity stats retrieved successfully.', $data);
+        return $this->apiSuccess('Activity stats retrieved successfully.', [...$data, 'retention_days' => $settings->auditRetentionDays()]);
     }
 
     /**

@@ -112,7 +112,7 @@ class ActivityController extends Controller
         ]);
     }
 
-    public function trend(Request $request): JsonResponse
+    public function trend(Request $request, ApplicationSettings $settings): JsonResponse
     {
         $buckets = DailyBuckets::fromRequest($request);
 
@@ -152,7 +152,7 @@ class ActivityController extends Controller
             ];
         });
 
-        return $this->apiSuccess('Audit trend.', $data);
+        return $this->apiSuccess('Audit trend.', [...$data, 'retention_days' => $settings->auditRetentionDays()]);
     }
 
     public function show(Activity $activity): JsonResponse

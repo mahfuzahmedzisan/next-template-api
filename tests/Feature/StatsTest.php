@@ -149,6 +149,20 @@ it('validates the range and falls back to the user then UTC timezone', function 
         ->assertJsonCount(90, 'data.daily');
 });
 
+it('reports the audit retention so charts can hide ranges that are already deleted', function (): void {
+    $admin = statsAdmin();
+
+    actingAsSanctum($admin)->getJson('/api/v1/admin/audit/trend')->assertJsonPath('data.retention_days', 180);
+
+    actingAsSanctum($admin)
+        ->putJson('/api/v1/admin/settings/general', ['registration_enabled' => true, 'audit_retention_days' => 30])
+        ->assertOk();
+
+    actingAsSanctum($admin)->getJson('/api/v1/admin/audit/trend')->assertJsonPath('data.retention_days', 30);
+    actingAsSanctum($admin)->getJson('/api/v1/admin/backups/history')->assertJsonPath('data.retention_days', 30);
+    actingAsSanctum($admin)->getJson('/api/v1/profile/activity/stats')->assertJsonPath('data.retention_days', 30);
+});
+
 it('keeps admin stats away from members', function (string $url): void {
     actingAsSanctum(User::factory()->create())->getJson($url)->assertForbidden();
 })->with([
