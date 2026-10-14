@@ -1,4 +1,4 @@
-# Coolify / production app image for the mahfuz-ahmed-api (Laravel API).
+# Coolify / production app image for the Laravel API (next-template-api).
 #
 # Topology: this image runs Nginx + PHP-FPM + the default queue + a media
 # queue worker + a backups queue worker + tusd. Postgres/MySQL, Redis, and

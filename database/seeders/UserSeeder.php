@@ -11,24 +11,27 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        User::query()->updateOrCreate(
-            ['email' => 'admin@dev.com'],
-            [
-                'name' => 'Admin',
-                'password' => Hash::make('admin@dev.com'),
-                'email_verified_at' => now(),
-                'role' => UserRole::Admin,
-            ],
-        );
+        $this->upsert('admin@dev.com', 'Admin', UserRole::Admin);
+        $this->upsert('user@dev.com', 'User', UserRole::User);
+    }
 
-        User::query()->updateOrCreate(
-            ['email' => 'user@dev.com'],
-            [
-                'name' => 'User',
-                'password' => Hash::make('user@dev.com'),
-                'email_verified_at' => now(),
-                'role' => UserRole::User,
-            ],
-        );
+    /**
+     * `role` is intentionally excluded from #[Fillable] on User (see that
+     * class), so a plain updateOrCreate() silently drops it. forceFill()
+     * bypasses the guard for this trusted, server-only write.
+     */
+    private function upsert(string $email, string $name, UserRole $role): void
+    {
+        $user = User::query()->firstOrNew(['email' => $email]);
+
+        $user->fill([
+            'name' => $name,
+            'password' => Hash::make($email),
+            'email_verified_at' => now(),
+        ]);
+
+        $user->forceFill(['role' => $role]);
+
+        $user->save();
     }
 }

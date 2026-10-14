@@ -19,17 +19,24 @@ class SeoPageSeeder extends Seeder
      * Copy earlier releases seeded. A field still holding one of these values
      * was never edited, so it is upgraded like an empty one.
      *
+     * These are historical values from a specific prior deployment of this
+     * template (not generic placeholders) - they exist purely so an existing
+     * deployment can upgrade its old seeded copy to the current wording
+     * without clobbering anything an admin has since edited. A fresh clone
+     * has no rows yet, so none of this ever matches; keep, trim, or replace
+     * these entries as a project's own content history requires.
+     *
      * @var array<string, array<string, list<mixed>>>
      */
     private const SUPERSEDED = [
         '/' => [
             'meta_title' => [
                 '{{site_name}} — Private workspace and portfolio',
-                'Mahfuz Ahmed: Full-Stack Developer for Next.js and Laravel',
+                'Legacy Author: Full-Stack Developer for Next.js and Laravel',
             ],
             'meta_description' => [
                 'Sign in to manage your profile, password and two-factor authentication in one private workspace, kept apart from the public portfolio.',
-                'Full-stack developer Mahfuz Ahmed builds fast, accessible web apps with Next.js and Laravel, from first sketch to launch, with weekly releases and support.',
+                'Full-stack developer Legacy Author builds fast, accessible web apps with Next.js and Laravel, from first sketch to launch, with weekly releases and support.',
             ],
             'keywords' => [
                 ['portfolio', 'private workspace', 'account security', 'two-factor authentication'],
@@ -37,25 +44,25 @@ class SeoPageSeeder extends Seeder
             ],
         ],
         '/about' => [
-            'meta_title' => ['About Mahfuz Ahmed, Full-Stack Web Developer in Dhaka'],
-            'meta_description' => ['Meet Mahfuz Ahmed, a full-stack developer with ten years of Next.js, React and Laravel experience who turns messy processes into simple, reliable web apps.'],
-            'keywords' => [['about Mahfuz Ahmed', 'full-stack developer Dhaka', 'Next.js', 'Laravel', 'freelance web developer']],
+            'meta_title' => ['About Legacy Author, Full-Stack Web Developer in Dhaka'],
+            'meta_description' => ['Meet Legacy Author, a full-stack developer with ten years of Next.js, React and Laravel experience who turns messy processes into simple, reliable web apps.'],
+            'keywords' => [['about Legacy Author', 'full-stack developer Dhaka', 'Next.js', 'Laravel', 'freelance web developer']],
         ],
         '/projects' => [
-            'meta_title' => ['Projects and Case Studies by Full-Stack Developer Mahfuz'],
+            'meta_title' => ['Projects and Case Studies by Full-Stack Developer Legacy'],
         ],
         '/contact' => [
-            'meta_title' => ['Contact Mahfuz Ahmed to Discuss Your Next Web Project'],
-            'meta_description' => ['Tell Mahfuz Ahmed about your team and the problem you want to solve. Get a personal reply within two working days, a free call and a short written proposal.'],
+            'meta_title' => ['Contact Legacy Author to Discuss Your Next Web Project'],
+            'meta_description' => ['Tell Legacy Author about your team and the problem you want to solve. Get a personal reply within two working days, a free call and a short written proposal.'],
             'keywords' => [['contact', 'hire a full-stack developer', 'web project quote', 'Next.js consultant']],
         ],
         '/terms' => [
-            'meta_title' => ['Terms of Service for the Mahfuz Ahmed Portfolio Website'],
+            'meta_title' => ['Terms of Service for the Legacy Author Portfolio Website'],
         ],
     ];
 
     /** Earlier seeded default authors, replaced like an empty value. */
-    private const SUPERSEDED_AUTHORS = ['Mahfuz Ahmed'];
+    private const SUPERSEDED_AUTHORS = ['Legacy Author'];
 
     private const DEFAULT_AUTHOR = 'Next Template';
 

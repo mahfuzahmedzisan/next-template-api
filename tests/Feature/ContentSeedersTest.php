@@ -74,7 +74,7 @@ it('rewrites the demo records to the current copy and leaves admin records alone
 
     $demo = Post::query()->where('slug', 'scoping-projects')->firstOrFail();
     $publishedAt = $demo->published_at;
-    $demo->update(['title' => 'How I scope a project', 'author' => 'Mahfuz Ahmed', 'body' => 'I wrote this.']);
+    $demo->update(['title' => 'How I scope a project', 'author' => 'Test Author', 'body' => 'I wrote this.']);
     $demo->seo->update(['meta_title' => 'An old personal SEO title that an earlier seed wrote']);
 
     $project = Project::query()->where('slug', 'ledgerly-finance-dashboard')->firstOrFail();

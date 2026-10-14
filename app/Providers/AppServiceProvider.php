@@ -8,6 +8,7 @@ use App\Services\ApplicationSettings;
 use App\Services\FfmpegHlsEncoder;
 use App\Support\ClientContext;
 use App\Support\FrontendOrigins;
+use App\Support\RequiredEnvironment;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -37,6 +38,29 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
         $this->configurePasswordResetUrl();
         $this->configureSeoMorphMap();
+        $this->assertRequiredEnvironment();
+    }
+
+    /**
+     * Skipped for `key:generate`/`app:install` (legitimately run before
+     * APP_KEY exists) and for tests (phpunit.xml sets its own env). Still
+     * runs for every HTTP request, queue worker, and other artisan command.
+     */
+    private function assertRequiredEnvironment(): void
+    {
+        if ($this->app->runningUnitTests()) {
+            return;
+        }
+
+        if ($this->app->runningInConsole()) {
+            $command = $_SERVER['argv'][1] ?? null;
+
+            if (in_array($command, ['key:generate', 'app:install'], true)) {
+                return;
+            }
+        }
+
+        RequiredEnvironment::assertValid();
     }
 
     /**

@@ -84,7 +84,7 @@ it('sends a warm-up request to every URL before a development scan', function ()
 
     $gets = Http::recorded(fn (Request $request) => $request->method() === 'GET'
         && $request->url() === 'http://localhost:3000/about'
-        && str_contains($request->header('User-Agent')[0] ?? '', 'MahfuzSeoScanner'));
+        && str_contains($request->header('User-Agent')[0] ?? '', 'TemplateSeoScanner'));
 
     // Warm-up, the sitemap's URL check, then the page scan.
     expect($gets)->toHaveCount(3)

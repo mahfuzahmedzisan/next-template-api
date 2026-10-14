@@ -56,9 +56,16 @@ return [
     'audit' => [
         /*
          * Next.js only puts streamed metadata in <head> for user agents in its
-         * htmlLimitedBots list; the frontend adds this token to that list.
+         * htmlLimitedBots list; the frontend adds this token to that list via
+         * its own SEO_SCANNER_UA_TOKEN env var. Both sides must agree on the
+         * token (not just this full user agent string), or SEO health
+         * scanning breaks silently because the frontend streams an empty
+         * <head> to the scanner.
          */
-        'user_agent' => env('SEO_SCANNER_USER_AGENT', 'Mozilla/5.0 (compatible; MahfuzSeoScanner/1.0)'),
+        'user_agent' => env(
+            'SEO_SCANNER_USER_AGENT',
+            'Mozilla/5.0 (compatible; '.env('SEO_SCANNER_UA_TOKEN', 'TemplateSeoScanner').'/1.0)'
+        ),
         // Each page is fetched a second time as a regular browser: crawlers outside the
         // htmlLimitedBots list get the same HTML, so metadata must be in <head> for it too.
         'browser_user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',

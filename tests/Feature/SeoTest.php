@@ -398,18 +398,18 @@ it('replaces the personal copy and author an older seeder wrote', function (): v
         'path' => '/about',
         'label' => 'About',
         'page_type' => 'about',
-        'meta_title' => 'About Mahfuz Ahmed, Full-Stack Web Developer in Dhaka',
-        'meta_description' => 'Meet Mahfuz Ahmed, a full-stack developer with ten years of Next.js, React and Laravel experience who turns messy processes into simple, reliable web apps.',
-        'keywords' => ['about Mahfuz Ahmed', 'full-stack developer Dhaka', 'Next.js', 'Laravel', 'freelance web developer'],
+        'meta_title' => 'About Legacy Author, Full-Stack Web Developer in Dhaka',
+        'meta_description' => 'Meet Legacy Author, a full-stack developer with ten years of Next.js, React and Laravel experience who turns messy processes into simple, reliable web apps.',
+        'keywords' => ['about Legacy Author', 'full-stack developer Dhaka', 'Next.js', 'Laravel', 'freelance web developer'],
     ]);
     seoPage([
         'path' => '/contact',
         'label' => 'Contact',
         'page_type' => 'contact',
-        'meta_title' => 'Contact Mahfuz Ahmed to Discuss Your Next Web Project',
+        'meta_title' => 'Contact Legacy Author to Discuss Your Next Web Project',
         'keywords' => ['contact', 'reach the team'],
     ]);
-    app(SeoSettings::class)->update(['default_author' => 'Mahfuz Ahmed']);
+    app(SeoSettings::class)->update(['default_author' => 'Legacy Author']);
 
     $this->seed(SeoPageSeeder::class);
 

@@ -22,7 +22,7 @@ return [
          * application name can be changed from the admin settings, which would
          * hide every existing backup.
          */
-        'name' => env('BACKUP_NAME', 'mahfuz-ahmed-api'),
+        'name' => env('BACKUP_NAME', 'next-template-api'),
 
         'source' => [
             'files' => [
@@ -303,7 +303,7 @@ return [
      */
     'monitor_backups' => [
         [
-            'name' => env('BACKUP_NAME', 'mahfuz-ahmed-api'),
+            'name' => env('BACKUP_NAME', 'next-template-api'),
             'disks' => ['backups'],
             'health_checks' => [
                 MaximumAgeInDays::class => 1,

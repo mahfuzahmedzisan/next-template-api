@@ -17,7 +17,7 @@ it('rejects api requests that do not present the bff secret', function (): void 
 
 it('rejects a trusted secret from an origin that is not allowlisted', function (): void {
     $this->withHeaders([
-        'X-Frontend-Origin' => 'https://mahfuz-steel.vercel.app',
+        'X-Frontend-Origin' => 'https://not-allowlisted.example.com',
     ])->postJson('/api/v1/auth/login', [
         'email' => 'admin@example.com',
         'password' => 'Password1!',

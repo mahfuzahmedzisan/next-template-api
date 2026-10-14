@@ -1,58 +1,108 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Next Template API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel 13 API that powers the companion Next.js starter template. It owns
+the database, auth (Sanctum + Fortify), SEO health scanning, media/HLS
+processing, scheduled backups, and the audit log. The browser never talks to
+this API directly — only the Next.js BFF does, using a shared secret.
 
-## About Laravel
+This repo is independent and self-contained: nothing here assumes a fixed
+path relative to the Next.js app or to Reverb. Clone all three wherever you
+like.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Prerequisites
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- PHP 8.4+, Composer
+- Node.js (only for `npm run build`, used by the Vite dev script)
+- A database: SQLite works out of the box for local dev; MySQL/Postgres for
+  production (see `.env.example`)
+- Redis — required for cache, queues, and broadcasting
+- Optional, depending on which modules you use: a search engine (Meilisearch
+  / Typesense / Algolia — `collection` driver needs none), `ffmpeg`/`ffprobe`
+  (media transcoding), `mysqldump`/`sqlite3` + `gzip` (backups)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## One-time setup
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer setup
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+This installs dependencies, copies `.env.example` to `.env` if missing, runs
+`php artisan app:install` (generates the app key, runs migrations, and
+interactively creates the first admin user), then installs and builds the
+frontend assets Vite/Blade needs.
 
-## Contributing
+Prefer to do it by hand, or run it non-interactively (e.g. in a container)?
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+composer install
+cp .env.example .env
+php artisan app:install --force   # uses APP_INSTALL_ADMIN_* env vars, or safe defaults
+```
 
-## Code of Conduct
+### Required environment variables
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+See `.env.example` — every variable is grouped by concern and commented with
+whether it's required or optional. At minimum for local dev you need the
+`App`, `Database`, `Session`, `Redis`, `Broadcasting`, and `Frontend / BFF
+trust` sections filled in (most already have working local defaults).
 
-## Security Vulnerabilities
+## Running the app locally
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+composer dev
+```
 
-## License
+This runs, concurrently: `php artisan serve`, queue listeners for the
+default, `seo`, `media`, and `backups` queues, and `npm run dev` (Vite).
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Run the companion Next.js app separately (see its own README) and point its
+`LARAVEL_API_URL` at this API's `APP_URL`.
+
+## Testing
+
+```bash
+composer test
+# or directly:
+php artisan test
+```
+
+Tests run against an in-memory SQLite database (see `phpunit.xml`) and don't
+touch your `.env` database.
+
+## Code style
+
+```bash
+vendor/bin/pint        # fix
+vendor/bin/pint --test # check only
+```
+
+## Optional modules
+
+These are independently toggleable by simply not configuring their env vars
+/ not running their workers — nothing breaks if you skip them:
+
+- **SEO health scanning** — `SEO_QUEUE_*` vars, needs its own queue worker
+- **Media / HLS video** — `ffmpeg`/`ffprobe`, tusd (bundled in the Docker
+  image), `MEDIA_DISK`
+- **Backups** — `spatie/laravel-backup`, `BACKUP_*` vars, see `docs/backups.md`
+- **Audit log** — `spatie/laravel-activitylog`, `ACTIVITYLOG_ENABLED`, see
+  `docs/audit.md`
+- **Search** — `SCOUT_DRIVER=collection` needs nothing extra (Eloquent LIKE
+  fallback); set it to `meilisearch`/`typesense`/`algolia` for production
+  and run `php artisan scout:import-all --fresh`
+
+## Deployment
+
+The `Dockerfile` builds a production image intended for Coolify or similar
+platforms. It bundles `ffmpeg`, `tusd`, and the backup CLI tools. See inline
+comments in the `Dockerfile` and `docs/backups.md` for operational details.
+
+## Using this as a template for a new project
+
+1. Rename `APP_NAME` in `.env.example` / `.env`.
+2. Update `BACKUP_NAME` in `.env` if you change it from the default — keep it
+   fixed afterwards, since renaming hides existing backup archives.
+3. Replace `SEO_SCANNER_UA_TOKEN` / `SEO_SCANNER_USER_AGENT` on both this API
+   and the Next.js app (they must match) if you want a non-default token.
+4. Review `database/seeders/SeoPageSeeder.php` for any placeholder copy you
+   want to replace before first deploy.

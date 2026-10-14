@@ -52,7 +52,7 @@ Inside the container (`www-data`):
 
 ```bash
 php artisan backup:list
-php artisan backup:restore --disk=backups --backup=mahfuz-ahmed-api/<file>.zip --reset
+php artisan backup:restore --disk=backups --backup=next-template-api/<file>.zip --reset
 php artisan migrate --force
 php artisan scout:import-all
 ```
